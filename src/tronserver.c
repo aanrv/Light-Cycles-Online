@@ -37,13 +37,13 @@ void exitwerror(const char* msg, int errno);
 
 int main(int argc, char** argv) {
 	const unsigned short DEFPORT = 1337;		// default port
-	
+
 	// create server
 	int servsock;
 	struct sockaddr_in servaddr;
 	unsigned short port = DEFPORT;
 	createserver(&servsock, &servaddr, port);
-	
+
 	puts("Server started.\nWaiting for players to connect...");
 
 	// wait for players to connect, assign appropriate values
@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
 
 void createserver(int* servsock, struct sockaddr_in* servaddr, unsigned short port) {
 	if ((*servsock = socket(AF_INET, SOCK_STREAM, 0)) == -1) exitwerror("socket", 1);
-	
+
 	int enable = 1;
 	if (setsockopt(*servsock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof (int)) == -1)
 		fprintf(stderr, "setsockopt: Failed, socket will no reuse port.\n");
@@ -84,30 +84,30 @@ void waitforplayers(int servsock, int* p1sock, int* p2sock, struct sockaddr_in* 
 
 	memset(p1addr, 0, sizeof (*p1addr));
 	memset(p2addr, 0, sizeof (*p2addr));
-	
+
 	socklen_t p1len = sizeof (*p1addr);
 	socklen_t p2len = sizeof (*p2addr);
-	
+
 	char p1buffer[INET_ADDRSTRLEN];
 	char p2buffer[INET_ADDRSTRLEN];
-	
+
 	*p1sock = accept(servsock, (struct sockaddr*) p1addr, &p1len);
 	if (*p1sock == -1) exitwerror("accept (Player1)", 1);
-	
+
 	if (inet_ntop(AF_INET, &(p1addr->sin_addr), p1buffer, INET_ADDRSTRLEN) == NULL) fprintf(stderr, "P1: Couldn't convert.\n");
 	else printf("Player 1 (%s:%u) connected.\n", p1buffer, ntohs(p1addr->sin_port));
-	
-	// send notification to player 1
-	char p1 = PLAYER_1;
-	if (send(*p1sock, &p1, 1, 0) == -1) exitwerror("send (player1)", 1);
-	
+
+
 	*p2sock = accept(servsock, (struct sockaddr*) p2addr, &p2len);
 	if (*p2sock == -1) exitwerror("accept (Player2)", 1);
-	
+
 	if (inet_ntop(AF_INET, &(p2addr->sin_addr), p2buffer, INET_ADDRSTRLEN) == NULL) fprintf(stderr, "P2: Couldn't convert.\n");
 	else printf("Player 2 (%s:%u) connected.\n", p2buffer, ntohs(p2addr->sin_port));
-	
-	// send notification to player 2
+
+
+	// wait after both have connected to send notifications
+	char p1 = PLAYER_1;
+	if (send(*p1sock, &p1, 1, 0) == -1) exitwerror("send (player1)", 1);
 	char p2 = PLAYER_2;
 	if (send(*p2sock, &p2, 1, 0) == -1) exitwerror("send (player2)", 1);
 }
