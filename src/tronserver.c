@@ -68,7 +68,6 @@ int main(int argc, char** argv) {
 	for (;;) {
 		sendvars(sockarr, dirbuffer);		// send starting directions
 		recvvars(dirbuffer, sockarr);		// recieve client information coming back to server socket
-		printf("p1: %d\np2: %d\n", dirbuffer[PLAYER_1], dirbuffer[PLAYER_2]);
 	}
 
 	return 0;
@@ -108,18 +107,15 @@ void waitforplayers(int servsock, int* sockarr, struct sockaddr_in* addrarr) {
 
 	sockarr[PLAYER_1] = accept(servsock, (struct sockaddr*) &addrarr[PLAYER_1], &p1len);
 	if (sockarr[PLAYER_1] == -1) exitwerror("accept (Player1)", 1);
-	puts("p1 connected");
-/*
-	if (inet_ntop(AF_INET, &(addrarr[PLAYER_1]->sin_addr), p1buffer, INET_ADDRSTRLEN) == NULL) fprintf(stderr, "P1: Couldn't convert.\n");
-	else printf("Player 1 (%s:%u) connected.\n", p1buffer, ntohs(p1addr->sin_port));
-*/
+
+	if (inet_ntop(AF_INET, &(addrarr[PLAYER_1].sin_addr), p1buffer, INET_ADDRSTRLEN) == NULL) fprintf(stderr, "P1: Couldn't convert.\n");
+	else printf("Player 1 (%s:%u) connected.\n", p1buffer, ntohs(addrarr[PLAYER_1].sin_port));
+
 	sockarr[PLAYER_2] = accept(servsock, (struct sockaddr*) &addrarr[PLAYER_2], &p2len);
 	if (sockarr[PLAYER_2] == -1) exitwerror("accept (Player2)", 1);
-	puts("p2 connected");
-/*
-	if (inet_ntop(AF_INET,&(addrarr[PLAYER_2]->sin_addr), p2buffer, INET_ADDRSTRLEN) == NULL) fprintf(stderr, "P2: Couldn't convert.\n");
-	else printf("Player 2 (%s:%u) connected.\n", p2buffer, ntohs(p2addr->sin_port));
-*/
+
+	if (inet_ntop(AF_INET,&(addrarr[PLAYER_2].sin_addr), p2buffer, INET_ADDRSTRLEN) == NULL) fprintf(stderr, "P2: Couldn't convert.\n");
+	else printf("Player 2 (%s:%u) connected.\n", p2buffer, ntohs(addrarr[PLAYER_2].sin_port));
 }
 
 void sendplayernums(int* socks) {
