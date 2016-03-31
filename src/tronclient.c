@@ -14,12 +14,11 @@
 #include "player.h"
 #include "h.h"			// PLAYER_1, PLAYER_2
 
-typedef enum _errtype {NONE, STD, PERROR, NCURSE} errtype;
+typedef enum _errtype {NONE, STD, PERROR} errtype;
 enum {APPNAME, PORTNUM, HOSTIP};
 
 const char playerchar = 'A';
-const int refreshrate = 50000;
-
+const int refreshrate = 50000;		// rate of redraw
 
 /**
  * Connects client socket to server with specified parameters.
@@ -28,17 +27,25 @@ const int refreshrate = 50000;
  * sersock and seraddr will be set to the server socket and server address respectively.
  * playernum will be set to either PLAYER_1 or PLAYER_2.
  */
-void connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, char* playernum);
+void connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum);
 
-/**
- * Initializes ncurses screen and starts the game's graphics.
- */
-void playgame();
+/* Initializes ncurses screen and starts the game's graphics. */
+void playgame(int clisock, int sersock, const unsigned char playernum);
 
-/**
- * Set up window (disable cursor, disable line buffering, set nonblock, set keypad, etc.)
- */
+/* Set up window (disable cursor, disable line buffering, set nonblock, set keypad, etc.) */
 errtype setscreen();
+
+/* (Re)draw screen based on player locations and directions. */
+void redrawscreen(struct Player* players);
+
+/* Retrieve variables from server and update accordingly. */
+void receivevariables(int clisock, struct Player* players, int numplayers);
+
+/* Send variables to server. */
+void sendvariables(int sersock, struct Player* players, int numplayers, const unsigned char playernum);
+
+/* Checks if player is within given bounds. */
+int withinbounds(const struct Player* p, int maxy, int maxx);
 
 /**
  * Exits program after printing msg.
@@ -56,17 +63,17 @@ int main(int argc, char** argv) {
 
 	int sersock;			// server socket
 	struct sockaddr_in seraddr;	// server address
-	char playernum;			// will hold PLAYER_1 or PLAYER_2 after connecting
+	unsigned char playernum;	// will hold PLAYER_1 or PLAYER_2 after connecting
 
 	connecttoserver(sock, atoi(argv[PORTNUM]), argc >= 3 ? argv[HOSTIP] : NULL, &sersock, &seraddr, &playernum);
-	
-	playgame();
-	
+
+	playgame(sock, sersock, playernum);
+
 	//close(sock);
 	return EXIT_SUCCESS;
 }
 
-void playgame() {
+void playgame(int clisock, int sersock, const unsigned char playernum) {
 	int i;
 	const int countdown = 3;
 	puts("Starting...");
@@ -77,35 +84,50 @@ void playgame() {
 		fprintf(stderr, "Unable to initialize curses window.\n");
 		exit(EXIT_FAILURE);
 	}
-	
-	
+
 	int maxy;
 	int maxx;
 	getmaxyx(win, maxy, maxx);
-	
+
 	cbreak();
 	nodelay(win, 1);
 	curs_set(0);
 	keypad(win, 1);
-	
-	struct Point pl;
-	pl.x = maxx / 2;
-	pl.y = maxy / 2;
-	struct Player p = createpl(pl, DOWN, playerchar);
-	
-	insertpl(&p);
-	
+
+	struct Point loc1;
+	loc1.x = maxx * 0.75f;
+	loc1.y = maxy / 2;
+
+	struct Point loc2;
+	loc2.x = maxx * 0.25f;
+	loc2.y = maxy / 2;
+
+	struct Player players[NUMPLAYERS];
+	memset(players, 0, sizeof (struct Player) * NUMPLAYERS);
+	players[PLAYER_1] = createpl(loc1, LEFT, playerchar);
+	players[PLAYER_2] = createpl(loc2, RIGHT, playerchar);
+
 	int withinscreen = 1;
 	while (withinscreen) {
-		checkdirchange(&p);	// check if key was pressed and change dir accordingly
-		movepl(&p);		// move player to next position 
-		usleep(refreshrate);
-		withinscreen = withinbounds(&p, maxy, maxx);
+		receivevariables(clisock, players, NUMPLAYERS);			// receive variables from server
+		for (i = 0; i < NUMPLAYERS; ++i) movepl(&players[i]);		// modify player locations
+
+		redrawscreen(players);						// redraw screen based on variables
+		withinscreen = withinbounds(&players[playernum], maxy, maxx);	// make sure current location is within bounds
+		checkdirchange(&players[playernum]);				// check if key was pressed and modify directions accordingly
+
+		sendvariables(clisock, players, NUMPLAYERS, playernum);		// send variables of direction to client to be read by server
+		usleep(refreshrate);						// sleep
 	}
-	
-	nodelay(win, FALSE);
-	getch();
+
 	endwin();
+}
+
+void redrawscreen(struct Player* players) {
+	clear();
+	int i;
+	for (i = 0; i < NUMPLAYERS; ++i) insertpl(&players[i]);
+	refresh();
 }
 
 errtype setscreen(WINDOW* win) {
@@ -116,7 +138,7 @@ errtype setscreen(WINDOW* win) {
 	return NONE;
 }
 
-void connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, char* playernum) {
+void connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum) {
 	// initialize server address
 	memset(seraddr, 0, sizeof (*seraddr));
 	seraddr->sin_family = AF_INET;
@@ -130,7 +152,7 @@ void connecttoserver(int clisock, unsigned short port, char* straddr, int* serso
 	*sersock = connect(clisock, (struct sockaddr*) seraddr, sizeof (*seraddr));
 	if (*sersock == -1) exitwerror("connect", PERROR);
 
-	// recieve notification
+	// receive notification
 	if (recv(clisock, playernum, 1, 0) == -1) exitwerror("recv", PERROR);
 
 	switch (*playernum) {
@@ -140,10 +162,44 @@ void connecttoserver(int clisock, unsigned short port, char* straddr, int* serso
 	}
 }
 
+void receivevariables(int clisock, struct Player* players, int numplayers) {
+	char buffer[SCPSIZE];
+	if (recv(clisock, buffer, SCPSIZE, 0) == -1) exitwerror("recv", PERROR);
+
+	players[PLAYER_1].dir = buffer[P1DIR];
+	players[PLAYER_2].dir = buffer[P2DIR];
+}
+
+void sendvariables(int clisock, struct Player* players, int numplayers, const unsigned char playernum) {
+	char buffer[CSPSIZE];
+	buffer[PDIR] = players[playernum].dir;
+
+	if (send(clisock, buffer, CSPSIZE, 0) == -1) exitwerror("send", PERROR);
+}
+
 void exitwerror(const char* msg, errtype err) {
+	endwin();
 	if (err == STD) fprintf(stderr, "%s\n", msg);
 	else if (err == PERROR) perror(msg);
-	else if (err == NCURSE) { endwin(); fprintf(stderr, "%s\n", msg); }
 	exit(EXIT_FAILURE);
+}
+
+
+int withinbounds(const struct Player* p, int maxy, int maxx) {
+	int out = 1;
+	
+	int cury = p->loc.y;
+	int curx = p->loc.x;
+	
+	int dy = p->dir == DOWN ? 1 : (p->dir == UP ? -1 : 0);
+	int dx = p->dir == RIGHT ? 1 : (p->dir == LEFT ? -1 : 0);
+	
+	cury += dy;
+	curx += dx;
+	
+	if (cury >= maxy || cury < 0) out = 0;
+	else if (curx >= maxx || curx < 0) out = 0;
+
+	return out;
 }
 
