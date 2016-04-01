@@ -4,6 +4,7 @@
 #include <sys/socket.h>		// socket, bind
 #include <netinet/in.h>		// sockaddr_in
 #include <arpa/inet.h>		// inet_ntop
+#include <unistd.h>		// close
 #include "player.h"		// Direction
 #include "h.h"			// PLAYER_1, PLAYER_2
 
@@ -22,14 +23,25 @@ void waitforplayers(int servsock, int* sockarr, struct sockaddr_in* addrarr);
 /* Send players their corresponding player numbers. */
 void sendplayernums(int* socks);
 
-/* Recieve sinal from client. */
-void recvclisig(char* dirs, int* clisocks);
+////// RECV FUNCTIONS ///////
 
-/* Recieves variables from player. */
+/* Recieve sinal from client. */
+void recvclisig(char* dirs, int* clisocks, int sersock);
+
+/* Recieves variables from player. 
+   Handles CS_STD signal. */
 void recvvars(char* dirs, int clisock);
+
+////// SEND FUNCTIONS //////
 
 /* Sends variables (direction, etc.) to each connected player. */
 void sendvars(int* socks, char* buffer);
+
+/* Send end signal to clients and close server.
+   Handles CS_COL signal. */
+void endclients(int* clisocks, int sersock, char winner);
+
+////////////////////////////
 
 /* Converts an str to an unsigned short with port-specific error checking. */
 unsigned short strtoport(char* port);
@@ -69,8 +81,8 @@ int main(int argc, char** argv) {
 	dirbuffer[PLAYER_2] = RIGHT;
 
 	for (;;) {
-		sendvars(sockarr, dirbuffer);		// send starting directions
-		recvclisig(dirbuffer, sockarr);		// recieve client information coming back to server socket
+		sendvars(sockarr, dirbuffer);			// send starting directions
+		recvclisig(dirbuffer, sockarr, servsock);	// recieve client information coming back to server socket
 	}
 
 	return 0;
@@ -129,7 +141,7 @@ void sendplayernums(int* socks) {
 	if (send(socks[PLAYER_2], &p2, 1, 0) == -1) exitwerror("send (player2)", 1);
 }
 
-void recvclisig(char* dirs, int* clisocks) {
+void recvclisig(char* dirs, int* clisocks, int sersock) {
 	char sigtype;
 	int i;
 	for (i = 0; i < NUMPLAYERS; ++i) {
@@ -137,7 +149,8 @@ void recvclisig(char* dirs, int* clisocks) {
 		if (recv(currsock, &sigtype, 1, 0) == -1) exitwerror("recvclisig", 1);	// check signal type
 
 		switch (sigtype) {
-			case CS_STD: recvvars(&dirs[i], clisocks[i]); break;			// std signal, recieve variables for player direction at i
+			case CS_STD: recvvars(&dirs[i], clisocks[i]); break;
+			case CS_COL: endclients(clisocks, sersock, (char)(i == PLAYER_1 ? PLAYER_2 : PLAYER_1)); break;
 			default: exitwerror("recvclisig: invalid signal", 0);
 		}
 	}
@@ -147,6 +160,18 @@ void recvvars(char* dirs, int clisock) {
 	char recvbuffer[CS_STDSIZE];
 	if (recv(clisock, recvbuffer, CS_STDSIZE, 0) == -1) exitwerror("recvvars", 1);
 	*dirs = recvbuffer[PDIR];							// set new direction for player
+}
+
+void endclients(int* clisocks, int sersock, char winner) {
+	char endsig = SC_END;
+	int i;
+	for (i = 0; i < NUMPLAYERS; ++i) {
+		int currsock = clisocks[i];
+		if (send(currsock, &endsig, 1, 0) == -1) exitwerror("endclients: send", 1);	// send signal
+		if (send(currsock, &winner, 1, 0) == -1) exitwerror("endclients: send", 1);	// send winner
+	}
+	close(sersock);
+	exit(EXIT_SUCCESS);
 }
 
 void sendvars(int* socks, char* buffer) {

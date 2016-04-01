@@ -39,13 +39,19 @@ errtype setscreen();
 void redrawscreen(struct Player* players);
 
 /* Recieve signal from server. */
-void recvsersig(int clisock, struct Player* players);
+void recv_server(int clisock, struct Player* players);
 
 /* Retrieve variables from server and update accordingly. */
-void receivevariables(int clisock, struct Player* players);
+void updateplayers(int clisock, struct Player* players);
+
+/* Properly terminate game. */
+void quitgame(int clisock);
 
 /* Send variables to server. */
-void sendvariables(int sersock, struct Player* players, const unsigned char playernum);
+void send_server(int clisock, struct Player* players, const unsigned char playernum);
+
+/* Send collision signal to server. */
+void sendcol(int clisock);
 
 /* Checks if player is within given bounds. */
 int withinbounds(const struct Player* p, int maxy, int maxx);
@@ -110,20 +116,17 @@ void playgame(int clisock, int sersock, const unsigned char playernum) {
 	players[PLAYER_1] = createpl(loc1, LEFT, playerchar);
 	players[PLAYER_2] = createpl(loc2, RIGHT, playerchar);
 
-	int withinscreen = 1;
-	while (withinscreen) {
-		recvsersig(clisock, players);				// receive variables from server
-		for (i = 0; i < NUMPLAYERS; ++i) movepl(&players[i]);		// modify player locations
+	for (;;) {
+		recv_server(clisock, players);				// receive signal from server
 
-		redrawscreen(players);						// redraw screen based on variables
-		withinscreen = withinbounds(&players[playernum], maxy, maxx);	// make sure current location is within bounds
-		checkdirchange(&players[playernum]);				// check if key was pressed and modify directions accordingly
-
-		sendvariables(clisock, players, playernum);			// send variables of direction to client to be read by server
-		usleep(refreshrate);						// sleep
+		if (withinbounds(&players[playernum], maxy, maxx)) {	// make sure current location is within bounds
+			checkdirchange(&players[playernum]);		// check if key was pressed and modify directions accordingly
+			send_server(clisock, players, playernum);	// send standard message (variables, etc.) to server
+		} else {
+			sendcol(clisock);				// not within bounds, send signal to server
+		}
+		usleep(refreshrate);
 	}
-
-	endwin();
 }
 
 void redrawscreen(struct Player* players) {
@@ -165,25 +168,47 @@ void connecttoserver(int clisock, unsigned short port, char* straddr, int* serso
 	}
 }
 
-void recvsersig(int clisock, struct Player* players) {
+void recv_server(int clisock, struct Player* players) {
 	char sigtype;
 	if (recv(clisock, &sigtype, 1, 0) == -1) exitwerror("recvsersig", PERROR);
 	
 	switch (sigtype) {
-		case SC_STD: receivevariables(clisock, players); break;
+		case SC_STD: updateplayers(clisock, players); break;
+		case SC_END: quitgame(clisock); break;
 		default: exitwerror("recvsersig: invalid signal", STD);
 	}
 }
 
-void receivevariables(int clisock, struct Player* players) {
+void updateplayers(int clisock, struct Player* players) {
 	char buffer[SC_STDSIZE];
 	if (recv(clisock, buffer, SC_STDSIZE, 0) == -1) exitwerror("recv", PERROR);
-
+	
+	// modify direction
 	players[PLAYER_1].dir = buffer[P1DIR];
 	players[PLAYER_2].dir = buffer[P2DIR];
+	
+	// modify location
+	movepl(&players[PLAYER_1]);
+	movepl(&players[PLAYER_2]);
+	
+	// redraw
+	redrawscreen(players);
 }
 
-void sendvariables(int clisock, struct Player* players, const unsigned char playernum) {
+void quitgame(int clisock) {
+	endwin();
+	
+	// determine winning player
+	char winner;
+	if (recv(clisock, &winner, 1, 0) == -1) exitwerror("quitgame: recv", PERROR);
+	
+	printf("The winner is: Player %d!\n", winner + 1);
+	
+	close(clisock);
+	exit(EXIT_SUCCESS);
+}
+
+void send_server(int clisock, struct Player* players, const unsigned char playernum) {
 	char msgtype = CS_STD;
 	char buffer[CS_STDSIZE];
 	buffer[PDIR] = players[playernum].dir;
@@ -192,13 +217,10 @@ void sendvariables(int clisock, struct Player* players, const unsigned char play
 	if (send(clisock, buffer, CS_STDSIZE, 0) == -1) exitwerror("send", PERROR);
 }
 
-void exitwerror(const char* msg, errtype err) {
-	endwin();
-	if (err == STD) fprintf(stderr, "%s\n", msg);
-	else if (err == PERROR) perror(msg);
-	exit(EXIT_FAILURE);
+void sendcol(int clisock) {
+	char collisionsignal = CS_COL;
+	if (send(clisock, &collisionsignal, 1, 0) == -1) exitwerror("sendcol: send", PERROR);
 }
-
 
 int withinbounds(const struct Player* p, int maxy, int maxx) {
 	int out = 1;
@@ -217,4 +239,13 @@ int withinbounds(const struct Player* p, int maxy, int maxx) {
 
 	return out;
 }
+
+void exitwerror(const char* msg, errtype err) {
+	endwin();
+	if (err == STD) fprintf(stderr, "%s\n", msg);
+	else if (err == PERROR) perror(msg);
+	exit(EXIT_FAILURE);
+}
+
+
 
