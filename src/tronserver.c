@@ -22,8 +22,11 @@ void waitforplayers(int servsock, int* sockarr, struct sockaddr_in* addrarr);
 /* Send players their corresponding player numbers. */
 void sendplayernums(int* socks);
 
-/* Recieves variables from each connected player. */
-void recvvars(char* dirs, int* clisocks);
+/* Recieve sinal from client. */
+void recvclisig(char* dirs, int* clisocks);
+
+/* Recieves variables from player. */
+void recvvars(char* dirs, int clisock);
 
 /* Sends variables (direction, etc.) to each connected player. */
 void sendvars(int* socks, char* buffer);
@@ -61,13 +64,13 @@ int main(int argc, char** argv) {
 	puts("Done.");
 	
 	// inital direction values
-	char dirbuffer[SCPSIZE];
+	char dirbuffer[SC_STDSIZE];
 	dirbuffer[PLAYER_1] = LEFT;
 	dirbuffer[PLAYER_2] = RIGHT;
 
 	for (;;) {
 		sendvars(sockarr, dirbuffer);		// send starting directions
-		recvvars(dirbuffer, sockarr);		// recieve client information coming back to server socket
+		recvclisig(dirbuffer, sockarr);		// recieve client information coming back to server socket
 	}
 
 	return 0;
@@ -126,23 +129,32 @@ void sendplayernums(int* socks) {
 	if (send(socks[PLAYER_2], &p2, 1, 0) == -1) exitwerror("send (player2)", 1);
 }
 
-void recvvars(char* dirs, int* clisocks) {
-	char recvbuffer[CSPSIZE];
+void recvclisig(char* dirs, int* clisocks) {
+	char sigtype;
 	int i;
-	for (i = 0; i < NUMPLAYERS; ++i) {		// recieve from all players
+	for (i = 0; i < NUMPLAYERS; ++i) {
 		int currsock = clisocks[i];
-		if (recv(currsock, recvbuffer, CSPSIZE, 0) == -1) exitwerror("recvvars", 1);
-		
-		if (i == PLAYER_1) dirs[PLAYER_1] = recvbuffer[PDIR];	// set direction
-		else if (i == PLAYER_2) dirs[PLAYER_2] = recvbuffer[PDIR];
-		else exitwerror("wottttt", 0);
+		if (recv(currsock, &sigtype, 1, 0) == -1) exitwerror("recvclisig", 1);	// check signal type
+
+		switch (sigtype) {
+			case CS_STD: recvvars(&dirs[i], clisocks[i]); break;			// std signal, recieve variables for player direction at i
+			default: exitwerror("recvclisig: invalid signal", 0);
+		}
 	}
 }
 
+void recvvars(char* dirs, int clisock) {
+	char recvbuffer[CS_STDSIZE];
+	if (recv(clisock, recvbuffer, CS_STDSIZE, 0) == -1) exitwerror("recvvars", 1);
+	*dirs = recvbuffer[PDIR];							// set new direction for player
+}
+
 void sendvars(int* socks, char* buffer) {
+	char sigtype = SC_STD;
 	int i;
 	for (i = 0; i < NUMPLAYERS; ++i) {
-		if (send(socks[i], buffer, SCPSIZE, 0) == -1) exitwerror("sendvars", 1);
+		if (send(socks[i], &sigtype, 1, 0) == -1) exitwerror("sendvars (sig)", 1);
+		if (send(socks[i], buffer, SC_STDSIZE, 0) == -1) exitwerror("sendvars", 1);
 	}
 }
 

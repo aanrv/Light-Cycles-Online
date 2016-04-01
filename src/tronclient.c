@@ -38,11 +38,14 @@ errtype setscreen();
 /* (Re)draw screen based on player locations and directions. */
 void redrawscreen(struct Player* players);
 
+/* Recieve signal from server. */
+void recvsersig(int clisock, struct Player* players);
+
 /* Retrieve variables from server and update accordingly. */
-void receivevariables(int clisock, struct Player* players, int numplayers);
+void receivevariables(int clisock, struct Player* players);
 
 /* Send variables to server. */
-void sendvariables(int sersock, struct Player* players, int numplayers, const unsigned char playernum);
+void sendvariables(int sersock, struct Player* players, const unsigned char playernum);
 
 /* Checks if player is within given bounds. */
 int withinbounds(const struct Player* p, int maxy, int maxx);
@@ -109,14 +112,14 @@ void playgame(int clisock, int sersock, const unsigned char playernum) {
 
 	int withinscreen = 1;
 	while (withinscreen) {
-		receivevariables(clisock, players, NUMPLAYERS);			// receive variables from server
+		recvsersig(clisock, players);				// receive variables from server
 		for (i = 0; i < NUMPLAYERS; ++i) movepl(&players[i]);		// modify player locations
 
 		redrawscreen(players);						// redraw screen based on variables
 		withinscreen = withinbounds(&players[playernum], maxy, maxx);	// make sure current location is within bounds
 		checkdirchange(&players[playernum]);				// check if key was pressed and modify directions accordingly
 
-		sendvariables(clisock, players, NUMPLAYERS, playernum);		// send variables of direction to client to be read by server
+		sendvariables(clisock, players, playernum);			// send variables of direction to client to be read by server
 		usleep(refreshrate);						// sleep
 	}
 
@@ -162,19 +165,31 @@ void connecttoserver(int clisock, unsigned short port, char* straddr, int* serso
 	}
 }
 
-void receivevariables(int clisock, struct Player* players, int numplayers) {
-	char buffer[SCPSIZE];
-	if (recv(clisock, buffer, SCPSIZE, 0) == -1) exitwerror("recv", PERROR);
+void recvsersig(int clisock, struct Player* players) {
+	char sigtype;
+	if (recv(clisock, &sigtype, 1, 0) == -1) exitwerror("recvsersig", PERROR);
+	
+	switch (sigtype) {
+		case SC_STD: receivevariables(clisock, players); break;
+		default: exitwerror("recvsersig: invalid signal", STD);
+	}
+}
+
+void receivevariables(int clisock, struct Player* players) {
+	char buffer[SC_STDSIZE];
+	if (recv(clisock, buffer, SC_STDSIZE, 0) == -1) exitwerror("recv", PERROR);
 
 	players[PLAYER_1].dir = buffer[P1DIR];
 	players[PLAYER_2].dir = buffer[P2DIR];
 }
 
-void sendvariables(int clisock, struct Player* players, int numplayers, const unsigned char playernum) {
-	char buffer[CSPSIZE];
+void sendvariables(int clisock, struct Player* players, const unsigned char playernum) {
+	char msgtype = CS_STD;
+	char buffer[CS_STDSIZE];
 	buffer[PDIR] = players[playernum].dir;
-
-	if (send(clisock, buffer, CSPSIZE, 0) == -1) exitwerror("send", PERROR);
+	
+	if (send(clisock, &msgtype, 1, 0) == -1) exitwerror("send", PERROR);
+	if (send(clisock, buffer, CS_STDSIZE, 0) == -1) exitwerror("send", PERROR);
 }
 
 void exitwerror(const char* msg, errtype err) {
