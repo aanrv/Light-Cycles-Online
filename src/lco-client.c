@@ -12,13 +12,10 @@
 #include <errno.h>
 #include <ncurses.h>
 #include "player.h"
+#include "visuals.h"
 #include "h.h"			// PLAYER_1, PLAYER_2
 
 enum {APPNAME, PORTNUM, HOSTIP};			// args
-enum {P1COLOR = 1, P2COLOR = 2, BORDERCOLOR = 3};	// colors
-
-const int refreshrate = 50000;		// rate of redraw
-const char playerbody = '*';
 
 /**
  * Connects client socket to server with specified parameters.
@@ -29,20 +26,8 @@ const char playerbody = '*';
  */
 void connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum);
 
-/* Create color pairs for players and border. */
-void assigncolors(void);
-
-/* Create border around screen. */
-void buildborder(void);
-
 /* Initializes ncurses screen and starts the game's graphics. */
 void playgame(int clisock, const unsigned char playernum);
-
-/* Set up window (disable cursor, disable line buffering, set nonblock, set keypad, etc.) */
-int setscreen(void);
-
-/* (Re)draw screen based on player locations and directions. */
-void redrawscreen(struct Player* players);
 
 /* Recieve signal from server. */
 void recv_server(int clisock, struct Player* players);
@@ -58,12 +43,6 @@ void send_server(int clisock, struct Player* players, const unsigned char player
 
 /* Send collision signal to server. */
 void sendcol(int clisock);
-
-/* Checks if next move is a collision. */
-int nocollision(const struct Player* p, int maxy, int maxx);
-
-/* Checks if player is within given bounds. */
-int withinbounds(const struct Player* p, int maxy, int maxx);
 
 int main(int argc, char** argv) {
 	if (argc < 2) { fprintf(stderr, "Usage: %s portnum [host ip]\n", argv[0]); exit(EXIT_FAILURE); }
@@ -84,19 +63,6 @@ int main(int argc, char** argv) {
 	return EXIT_SUCCESS;
 }
 
-void assigncolors(void) {
-	init_pair(P1COLOR, COLOR_GREEN, COLOR_GREEN);
-	init_pair(P2COLOR, COLOR_BLUE, COLOR_BLUE);
-	init_pair(BORDERCOLOR, COLOR_RED, COLOR_BLACK);
-}
-
-void buildborder(void) {
-	int border_attr = COLOR_PAIR(BORDERCOLOR);
-	attron(border_attr);
-	border(ACS_VLINE, ACS_VLINE, ACS_HLINE, ACS_HLINE, ACS_ULCORNER, ACS_URCORNER, ACS_LLCORNER, ACS_LRCORNER);
-	attroff(border_attr);
-}
-
 void playgame(int clisock, const unsigned char playernum) {
 	int i;
 	const int countdown = 3;
@@ -105,10 +71,10 @@ void playgame(int clisock, const unsigned char playernum) {
 
 	if (initscr() == NULL) exitwerror("Unable to initialize curses window.\n", EXIT_STD);
 
-	start_color();
+	if (has_colors()) start_color();
 	assigncolors();
 	buildborder();
-	
+
 	int maxy;
 	int maxx;
 	getmaxyx(stdscr, maxy, maxx);
@@ -121,46 +87,20 @@ void playgame(int clisock, const unsigned char playernum) {
 
 	struct Player players[NUMPLAYERS];
 	memset(players, 0, sizeof (struct Player) * NUMPLAYERS);
-	players[PLAYER_1] = createpl(loc1, RIGHT, playerbody);
-	players[PLAYER_2] = createpl(loc2, LEFT, playerbody);
+	players[PLAYER_1] = createpl(loc1, RIGHT, ACS_BLOCK);
+	players[PLAYER_2] = createpl(loc2, LEFT, ACS_BLOCK);
 
 	for (;;) {
 		recv_server(clisock, players);				// receive signal from server
 		checkdirchange(&players[playernum]);			// FIRST, check for a direction change
 
-		if (nocollision(&players[playernum], maxy, maxx)) {	// AFTER, make sure no collision will occur
+		if (!willcollide(&players[playernum])) {	// AFTER, make sure no collision will occur
 			send_server(clisock, players, playernum);	// send standard message (variables, etc.) to server
 		} else {
 			sendcol(clisock);				// will collide
 		}
 		usleep(refreshrate);
 	}
-}
-
-void redrawscreen(struct Player* players) {
-	int i;
-	for (i = 0; i < NUMPLAYERS; ++i) {
-		int currcolor;
-		switch (i + 1) {
-			case P1COLOR:	currcolor = P1COLOR; break;
-			case P2COLOR:	currcolor = P2COLOR; break;
-			default:	exitwerror("redrawscreen: Invalid color.", EXIT_STD);
-		}
-		int attributes = COLOR_PAIR(currcolor);
-		attron(attributes);
-		insertpl(&players[i]);
-		attroff(attributes);
-	}
-
-	refresh();
-}
-
-int setscreen(void) {
-	if (curs_set(0) == ERR) return 0;		// hide cursor
-	if (nodelay(stdscr, TRUE) == ERR) return 0;	// set nonblocking
-	if (cbreak() == ERR) return 0;			// disable line buffering
-	if (keypad(stdscr, 1) == ERR) return 0;		// enable user terminal
-	return 1;
 }
 
 void connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum) {
@@ -190,7 +130,7 @@ void connecttoserver(int clisock, unsigned short port, char* straddr, int* serso
 void recv_server(int clisock, struct Player* players) {
 	char sigtype;
 	if (recv(clisock, &sigtype, 1, 0) == -1) exitwerror("recvsersig", EXIT_ERRNO);
-	
+
 	switch (sigtype) {
 		case SC_STD: updateplayers(clisock, players); break;
 		case SC_END: quitgame(clisock); break;
@@ -201,31 +141,31 @@ void recv_server(int clisock, struct Player* players) {
 void updateplayers(int clisock, struct Player* players) {
 	char buffer[SC_STDSIZE];
 	if (recv(clisock, buffer, SC_STDSIZE, 0) == -1) exitwerror("recv", EXIT_ERRNO);
-	
+
 	// modify direction
 	players[PLAYER_1].dir = buffer[P1DIR];
 	players[PLAYER_2].dir = buffer[P2DIR];
-	
+
 	// modify location
 	movepl(&players[PLAYER_1]);
 	movepl(&players[PLAYER_2]);
-	
+
 	// redraw
 	redrawscreen(players);
 }
 
 void quitgame(int clisock) {
 	endwin();
-	
+
 	// determine winning player
 	char winner;
 	if (recv(clisock, &winner, 1, 0) == -1) exitwerror("quitgame: recv", EXIT_ERRNO);
-	
+
 	switch (winner) {
 		case 3: puts("Draw!"); break;
 		default: printf("Player %d wins!\n", winner + 1);
 	}
-	
+
 	close(clisock);
 	exit(EXIT_SUCCESS);
 }
@@ -234,7 +174,7 @@ void send_server(int clisock, struct Player* players, const unsigned char player
 	char msgtype = CS_STD;
 	char buffer[CS_STDSIZE];
 	buffer[PDIR] = players[playernum].dir;
-	
+
 	if (send(clisock, &msgtype, 1, 0) == -1) exitwerror("send", EXIT_ERRNO);
 	if (send(clisock, buffer, CS_STDSIZE, 0) == -1) exitwerror("send", EXIT_ERRNO);
 }
@@ -242,28 +182,6 @@ void send_server(int clisock, struct Player* players, const unsigned char player
 void sendcol(int clisock) {
 	char collisionsignal = CS_COL;
 	if (send(clisock, &collisionsignal, 1, 0) == -1) exitwerror("sendcol: send", EXIT_ERRNO);
-}
-
-int nocollision(const struct Player* p, int maxy, int maxx) {
-	return withinbounds(p, maxy, maxx) && (!willcollide(p));
-}
-
-int withinbounds(const struct Player* p, int maxy, int maxx) {
-	int out = 1;
-	
-	int cury = p->loc.y;
-	int curx = p->loc.x;
-	
-	int dy = p->dir == DOWN ? 1 : (p->dir == UP ? -1 : 0);
-	int dx = p->dir == RIGHT ? 1 : (p->dir == LEFT ? -1 : 0);
-	
-	cury += dy;
-	curx += dx;
-	
-	if (cury >= maxy || cury < 0) out = 0;
-	else if (curx >= maxx || curx < 0) out = 0;
-
-	return out;
 }
 
 void exitwerror(const char* msg, int exittype) {

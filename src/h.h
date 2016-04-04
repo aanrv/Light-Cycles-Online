@@ -1,5 +1,8 @@
-const long PORTMIN = 1024;
-const long PORTMAX = 65535;
+#ifndef H_H
+#define H_H
+
+static const long PORTMIN = 1024;
+static const long PORTMAX = 65535;
 
 #define NUMPLAYERS 2		// number of players
 enum {PLAYER_1, PLAYER_2};	// player information indices
@@ -41,3 +44,4 @@ void exitwerror(const char* msg, int exittype);
 /* Convert string to numerical value with port-specific error checking. */
 unsigned short strtoport(char* str);
 
+#endif // H_H

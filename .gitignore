@@ -2,5 +2,6 @@ lco-server
 lco-server.o
 lco-client
 lco-client.o
+visuals.o
 player.o
 
