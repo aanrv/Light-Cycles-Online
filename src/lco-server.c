@@ -10,9 +10,7 @@
 
 enum {APPNAME, PORTNUM};
 
-const long PORTMIN 		= 1024;		// smallest port num allowed
-const long PORTMAX 		= 65535;	// largest port num allowed
-const unsigned short DEFPORT	= 1337;		// default port to use if not provided
+const unsigned short DEFPORT = 1337;		// default port to use if not provided
 
 /* Creates server and assigns socket and address. */
 void createserver(int* servsock, struct sockaddr_in* servaddr, unsigned short port);
@@ -23,16 +21,12 @@ void waitforplayers(int servsock, int* sockarr, struct sockaddr_in* addrarr);
 /* Send players their corresponding player numbers. */
 void sendplayernums(int* socks);
 
-////// RECV FUNCTIONS ///////
-
 /* Recieve sinal from client. */
 void recvclisig(char* dirs, int* clisocks, int sersock);
 
 /* Recieves variables from player. 
    Handles CS_STD signal. */
 void recvvars(char* dirs, int clisock);
-
-////// SEND FUNCTIONS //////
 
 /* Sends variables (direction, etc.) to each connected player. */
 void sendvars(int* socks, char* buffer);
@@ -41,21 +35,18 @@ void sendvars(int* socks, char* buffer);
    Handles CS_COL signal. */
 void endclients(int* clisocks, int sersock, char winner);
 
-////////////////////////////
-
-/* Converts an str to an unsigned short with port-specific error checking. */
-unsigned short strtoport(char* port);
-
 /* Closes server socket and exits program with provided exitcode. */
 void exitserver(int sersock, int exitcode);
 
 int main(int argc, char** argv) {
-	const unsigned short DEFPORT = 1337;		// default port
+	const unsigned short DEFPORT = 1337;
 
 	// create server
 	int servsock;
 	struct sockaddr_in servaddr;
-	unsigned short port = DEFPORT;
+	unsigned short port = argc == 2 ? strtoport(argv[PORTNUM]) : DEFPORT;
+	if (port == 0) exitwerror("Invalid port.", EXIT_STD);
+
 	createserver(&servsock, &servaddr, port);
 
 	puts("Server started.\nWaiting for players to connect...");
@@ -70,8 +61,8 @@ int main(int argc, char** argv) {
 
 	// inital direction values
 	char dirbuffer[SC_STDSIZE];
-	dirbuffer[PLAYER_1] = LEFT;
-	dirbuffer[PLAYER_2] = RIGHT;
+	dirbuffer[PLAYER_1] = RIGHT;
+	dirbuffer[PLAYER_2] = LEFT;
 
 	for (;;) {
 		sendvars(sockarr, dirbuffer);			// send starting directions

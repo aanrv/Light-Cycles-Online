@@ -1,4 +1,6 @@
-c
-s
-notes.txt
+lco-server
+lco-server.o
+lco-client
+lco-client.o
+player.o
 

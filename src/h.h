@@ -1,3 +1,6 @@
+const long PORTMIN = 1024;
+const long PORTMAX = 65535;
+
 #define NUMPLAYERS 2		// number of players
 enum {PLAYER_1, PLAYER_2};	// player information indices
 
@@ -34,4 +37,7 @@ enum EXIT_TYPE {
 
 /* Exits program by displaying message. Uses perror if exittype is set. */
 void exitwerror(const char* msg, int exittype);
+
+/* Convert string to numerical value with port-specific error checking. */
+unsigned short strtoport(char* str);
 

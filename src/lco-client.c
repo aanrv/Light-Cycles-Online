@@ -14,11 +14,11 @@
 #include "player.h"
 #include "h.h"			// PLAYER_1, PLAYER_2
 
-typedef enum _errtype {NONE, STD, PERROR} errtype;
 enum {APPNAME, PORTNUM, HOSTIP};			// args
-enum {P1COLOR = 1, P2COLOR = 2};			// colors
+enum {P1COLOR = 1, P2COLOR = 2, BORDERCOLOR = 3};	// colors
 
-const int refreshrate = 0;		// rate of redraw
+const int refreshrate = 50000;		// rate of redraw
+const char playerbody = '*';
 
 /**
  * Connects client socket to server with specified parameters.
@@ -29,13 +29,17 @@ const int refreshrate = 0;		// rate of redraw
  */
 void connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum);
 
+/* Create color pairs for players and border. */
 void assigncolors(void);
 
+/* Create border around screen. */
+void buildborder(void);
+
 /* Initializes ncurses screen and starts the game's graphics. */
-void playgame(int clisock, int sersock, const unsigned char playernum);
+void playgame(int clisock, const unsigned char playernum);
 
 /* Set up window (disable cursor, disable line buffering, set nonblock, set keypad, etc.) */
-errtype setscreen(WINDOW* win);
+int setscreen(void);
 
 /* (Re)draw screen based on player locations and directions. */
 void redrawscreen(struct Player* players);
@@ -74,47 +78,51 @@ int main(int argc, char** argv) {
 
 	connecttoserver(sock, atoi(argv[PORTNUM]), argc >= 3 ? argv[HOSTIP] : NULL, &sersock, &seraddr, &playernum);
 
-	playgame(sock, sersock, playernum);
+	playgame(sock, playernum);
 
 	//close(sock);
 	return EXIT_SUCCESS;
 }
 
 void assigncolors(void) {
-	init_pair(P1COLOR, COLOR_GREEN, COLOR_BLACK);
-	init_pair(P2COLOR, COLOR_BLUE, COLOR_BLACK);
+	init_pair(P1COLOR, COLOR_GREEN, COLOR_GREEN);
+	init_pair(P2COLOR, COLOR_BLUE, COLOR_BLUE);
+	init_pair(BORDERCOLOR, COLOR_RED, COLOR_BLACK);
 }
 
-void playgame(int clisock, int sersock, const unsigned char playernum) {
+void buildborder(void) {
+	int border_attr = COLOR_PAIR(BORDERCOLOR);
+	attron(border_attr);
+	border(ACS_VLINE, ACS_VLINE, ACS_HLINE, ACS_HLINE, ACS_ULCORNER, ACS_URCORNER, ACS_LLCORNER, ACS_LRCORNER);
+	attroff(border_attr);
+}
+
+void playgame(int clisock, const unsigned char playernum) {
 	int i;
 	const int countdown = 3;
 	puts("Starting...");
 	for (i = countdown; i > 0; --i) { printf("%d ", i); fflush(stdout); sleep(1); }
 
-	WINDOW* win = initscr();
-	if (win == NULL) exitwerror("Unable to initialize curses window.\n", EXIT_STD);
+	if (initscr() == NULL) exitwerror("Unable to initialize curses window.\n", EXIT_STD);
 
 	start_color();
-	assigncolors();		// assign colors to players
-
+	assigncolors();
+	buildborder();
+	
 	int maxy;
 	int maxx;
-	getmaxyx(win, maxy, maxx);
+	getmaxyx(stdscr, maxy, maxx);
 
-	if (setscreen(win) == ERR) exitwerror("Unable to set screen.", EXIT_STD);
+	if (!setscreen()) exitwerror("Unable to set screen settings.", EXIT_STD);
 
-	struct Point loc1;
-	loc1.x = maxx * 0.75f;
-	loc1.y = maxy / 2;
-
-	struct Point loc2;
-	loc2.x = maxx * 0.25f;
-	loc2.y = maxy / 2;
+	// starting locations of players
+	struct Point loc1 = {.x = maxx * 0.25f, .y = maxy / 2};
+	struct Point loc2 = {.x = maxx * 0.75f, .y = maxy / 2};
 
 	struct Player players[NUMPLAYERS];
 	memset(players, 0, sizeof (struct Player) * NUMPLAYERS);
-	players[PLAYER_1] = createpl(loc1, LEFT, ACS_BLOCK);
-	players[PLAYER_2] = createpl(loc2, RIGHT, ACS_BLOCK);
+	players[PLAYER_1] = createpl(loc1, RIGHT, playerbody);
+	players[PLAYER_2] = createpl(loc2, LEFT, playerbody);
 
 	for (;;) {
 		recv_server(clisock, players);				// receive signal from server
@@ -138,20 +146,21 @@ void redrawscreen(struct Player* players) {
 			case P2COLOR:	currcolor = P2COLOR; break;
 			default:	exitwerror("redrawscreen: Invalid color.", EXIT_STD);
 		}
-		attron(COLOR_PAIR(currcolor));
+		int attributes = COLOR_PAIR(currcolor);
+		attron(attributes);
 		insertpl(&players[i]);
-		attroff(COLOR_PAIR(currcolor));
+		attroff(attributes);
 	}
 
 	refresh();
 }
 
-errtype setscreen(WINDOW* win) {
-	if (curs_set(0) == ERR) return ERR;		// hide cursor
-	if (nodelay(win, TRUE) == ERR) return ERR;	// set nonblocking
-	if (cbreak() == ERR) return ERR;		// disable line buffering
-	if (keypad(win, 1) == ERR) return ERR;		// enable user terminal
-	return NONE;
+int setscreen(void) {
+	if (curs_set(0) == ERR) return 0;		// hide cursor
+	if (nodelay(stdscr, TRUE) == ERR) return 0;	// set nonblocking
+	if (cbreak() == ERR) return 0;			// disable line buffering
+	if (keypad(stdscr, 1) == ERR) return 0;		// enable user terminal
+	return 1;
 }
 
 void connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum) {
@@ -212,7 +221,7 @@ void quitgame(int clisock) {
 	char winner;
 	if (recv(clisock, &winner, 1, 0) == -1) exitwerror("quitgame: recv", EXIT_ERRNO);
 	
-	printf("The winner is: Player %d!\n", winner + 1);
+	printf("Player %d wins!\n", winner + 1);
 	
 	close(clisock);
 	exit(EXIT_SUCCESS);
@@ -261,5 +270,14 @@ void exitwerror(const char* msg, int exittype) {
 		case EXIT_ERRNO:	perror(msg);
 	}
 	exit(EXIT_FAILURE);
+}
+
+
+unsigned short strtoport(char* str) {
+	const int BASE = 10;		// conversion base
+	long out = strtol(str, NULL, BASE);
+
+	if (out < PORTMIN || out > PORTMAX) out = 0;
+	return (unsigned short) out;
 }
 
