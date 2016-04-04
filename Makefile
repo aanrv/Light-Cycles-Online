@@ -1,6 +1,6 @@
 CC	= gcc
 LIBS	= -lncurses
-FLAGS	= -Wall
+FLAGS	= -Wall -Wextra
 
 default: lco-server lco-client
 

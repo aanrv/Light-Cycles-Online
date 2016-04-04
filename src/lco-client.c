@@ -221,7 +221,10 @@ void quitgame(int clisock) {
 	char winner;
 	if (recv(clisock, &winner, 1, 0) == -1) exitwerror("quitgame: recv", EXIT_ERRNO);
 	
-	printf("Player %d wins!\n", winner + 1);
+	switch (winner) {
+		case 3: puts("Draw!"); break;
+		default: printf("Player %d wins!\n", winner + 1);
+	}
 	
 	close(clisock);
 	exit(EXIT_SUCCESS);
