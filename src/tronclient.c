@@ -15,10 +15,10 @@
 #include "h.h"			// PLAYER_1, PLAYER_2
 
 typedef enum _errtype {NONE, STD, PERROR} errtype;
-enum {APPNAME, PORTNUM, HOSTIP};
+enum {APPNAME, PORTNUM, HOSTIP};			// args
+enum {P1COLOR = 1, P2COLOR = 2};			// colors
 
-const char playerchar = 'A';
-const int refreshrate = 50000;		// rate of redraw
+const int refreshrate = 0;		// rate of redraw
 
 /**
  * Connects client socket to server with specified parameters.
@@ -29,11 +29,13 @@ const int refreshrate = 50000;		// rate of redraw
  */
 void connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum);
 
+void assigncolors(void);
+
 /* Initializes ncurses screen and starts the game's graphics. */
 void playgame(int clisock, int sersock, const unsigned char playernum);
 
 /* Set up window (disable cursor, disable line buffering, set nonblock, set keypad, etc.) */
-errtype setscreen();
+errtype setscreen(WINDOW* win);
 
 /* (Re)draw screen based on player locations and directions. */
 void redrawscreen(struct Player* players);
@@ -53,22 +55,18 @@ void send_server(int clisock, struct Player* players, const unsigned char player
 /* Send collision signal to server. */
 void sendcol(int clisock);
 
+/* Checks if next move is a collision. */
+int nocollision(const struct Player* p, int maxy, int maxx);
+
 /* Checks if player is within given bounds. */
 int withinbounds(const struct Player* p, int maxy, int maxx);
-
-/**
- * Exits program after printing msg.
- * If useserrno is set, perror will be used,
- * otherwise message is printed directly to stderr.
- */
-void exitwerror(const char* msg, errtype err);
 
 int main(int argc, char** argv) {
 	if (argc < 2) { fprintf(stderr, "Usage: %s portnum [host ip]\n", argv[0]); exit(EXIT_FAILURE); }
 
 	// create socket
 	int sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (sock == -1) exitwerror("socket", PERROR);
+	if (sock == -1) exitwerror("socket", EXIT_ERRNO);
 
 	int sersock;			// server socket
 	struct sockaddr_in seraddr;	// server address
@@ -82,6 +80,11 @@ int main(int argc, char** argv) {
 	return EXIT_SUCCESS;
 }
 
+void assigncolors(void) {
+	init_pair(P1COLOR, COLOR_GREEN, COLOR_BLACK);
+	init_pair(P2COLOR, COLOR_BLUE, COLOR_BLACK);
+}
+
 void playgame(int clisock, int sersock, const unsigned char playernum) {
 	int i;
 	const int countdown = 3;
@@ -89,19 +92,16 @@ void playgame(int clisock, int sersock, const unsigned char playernum) {
 	for (i = countdown; i > 0; --i) { printf("%d ", i); fflush(stdout); sleep(1); }
 
 	WINDOW* win = initscr();
-	if (win == NULL) {
-		fprintf(stderr, "Unable to initialize curses window.\n");
-		exit(EXIT_FAILURE);
-	}
+	if (win == NULL) exitwerror("Unable to initialize curses window.\n", EXIT_STD);
+
+	start_color();
+	assigncolors();		// assign colors to players
 
 	int maxy;
 	int maxx;
 	getmaxyx(win, maxy, maxx);
 
-	cbreak();
-	nodelay(win, 1);
-	curs_set(0);
-	keypad(win, 1);
+	if (setscreen(win) == ERR) exitwerror("Unable to set screen.", EXIT_STD);
 
 	struct Point loc1;
 	loc1.x = maxx * 0.75f;
@@ -113,26 +113,36 @@ void playgame(int clisock, int sersock, const unsigned char playernum) {
 
 	struct Player players[NUMPLAYERS];
 	memset(players, 0, sizeof (struct Player) * NUMPLAYERS);
-	players[PLAYER_1] = createpl(loc1, LEFT, playerchar);
-	players[PLAYER_2] = createpl(loc2, RIGHT, playerchar);
+	players[PLAYER_1] = createpl(loc1, LEFT, ACS_BLOCK);
+	players[PLAYER_2] = createpl(loc2, RIGHT, ACS_BLOCK);
 
 	for (;;) {
 		recv_server(clisock, players);				// receive signal from server
+		checkdirchange(&players[playernum]);			// FIRST, check for a direction change
 
-		if (withinbounds(&players[playernum], maxy, maxx)) {	// make sure current location is within bounds
-			checkdirchange(&players[playernum]);		// check if key was pressed and modify directions accordingly
+		if (nocollision(&players[playernum], maxy, maxx)) {	// AFTER, make sure no collision will occur
 			send_server(clisock, players, playernum);	// send standard message (variables, etc.) to server
 		} else {
-			sendcol(clisock);				// not within bounds, send signal to server
+			sendcol(clisock);				// will collide
 		}
 		usleep(refreshrate);
 	}
 }
 
 void redrawscreen(struct Player* players) {
-	clear();
 	int i;
-	for (i = 0; i < NUMPLAYERS; ++i) insertpl(&players[i]);
+	for (i = 0; i < NUMPLAYERS; ++i) {
+		int currcolor;
+		switch (i + 1) {
+			case P1COLOR:	currcolor = P1COLOR; break;
+			case P2COLOR:	currcolor = P2COLOR; break;
+			default:	exitwerror("redrawscreen: Invalid color.", EXIT_STD);
+		}
+		attron(COLOR_PAIR(currcolor));
+		insertpl(&players[i]);
+		attroff(COLOR_PAIR(currcolor));
+	}
+
 	refresh();
 }
 
@@ -152,36 +162,36 @@ void connecttoserver(int clisock, unsigned short port, char* straddr, int* serso
 	if (straddr == NULL)
 		seraddr->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	else
-		if (inet_pton(AF_INET, straddr, &(seraddr->sin_addr.s_addr)) <= 0) exitwerror("Invalid ip.", STD);
+		if (inet_pton(AF_INET, straddr, &(seraddr->sin_addr.s_addr)) <= 0) exitwerror("Invalid ip.", EXIT_STD);
 
 	// connect to server
 	*sersock = connect(clisock, (struct sockaddr*) seraddr, sizeof (*seraddr));
-	if (*sersock == -1) exitwerror("connect", PERROR);
+	if (*sersock == -1) exitwerror("connect", EXIT_ERRNO);
 
 	// receive notification
-	if (recv(clisock, playernum, 1, 0) == -1) exitwerror("recv", PERROR);
+	if (recv(clisock, playernum, 1, 0) == -1) exitwerror("recv", EXIT_ERRNO);
 
 	switch (*playernum) {
 		case PLAYER_1: puts("Connected as Player 1."); break;
 		case PLAYER_2: puts("Connected as Player 2."); break;
-		default: exitwerror("Received invalid player number", STD);
+		default: exitwerror("Received invalid player number", EXIT_STD);
 	}
 }
 
 void recv_server(int clisock, struct Player* players) {
 	char sigtype;
-	if (recv(clisock, &sigtype, 1, 0) == -1) exitwerror("recvsersig", PERROR);
+	if (recv(clisock, &sigtype, 1, 0) == -1) exitwerror("recvsersig", EXIT_ERRNO);
 	
 	switch (sigtype) {
 		case SC_STD: updateplayers(clisock, players); break;
 		case SC_END: quitgame(clisock); break;
-		default: exitwerror("recvsersig: invalid signal", STD);
+		default: exitwerror("recvsersig: invalid signal", EXIT_STD);
 	}
 }
 
 void updateplayers(int clisock, struct Player* players) {
 	char buffer[SC_STDSIZE];
-	if (recv(clisock, buffer, SC_STDSIZE, 0) == -1) exitwerror("recv", PERROR);
+	if (recv(clisock, buffer, SC_STDSIZE, 0) == -1) exitwerror("recv", EXIT_ERRNO);
 	
 	// modify direction
 	players[PLAYER_1].dir = buffer[P1DIR];
@@ -200,7 +210,7 @@ void quitgame(int clisock) {
 	
 	// determine winning player
 	char winner;
-	if (recv(clisock, &winner, 1, 0) == -1) exitwerror("quitgame: recv", PERROR);
+	if (recv(clisock, &winner, 1, 0) == -1) exitwerror("quitgame: recv", EXIT_ERRNO);
 	
 	printf("The winner is: Player %d!\n", winner + 1);
 	
@@ -213,13 +223,17 @@ void send_server(int clisock, struct Player* players, const unsigned char player
 	char buffer[CS_STDSIZE];
 	buffer[PDIR] = players[playernum].dir;
 	
-	if (send(clisock, &msgtype, 1, 0) == -1) exitwerror("send", PERROR);
-	if (send(clisock, buffer, CS_STDSIZE, 0) == -1) exitwerror("send", PERROR);
+	if (send(clisock, &msgtype, 1, 0) == -1) exitwerror("send", EXIT_ERRNO);
+	if (send(clisock, buffer, CS_STDSIZE, 0) == -1) exitwerror("send", EXIT_ERRNO);
 }
 
 void sendcol(int clisock) {
 	char collisionsignal = CS_COL;
-	if (send(clisock, &collisionsignal, 1, 0) == -1) exitwerror("sendcol: send", PERROR);
+	if (send(clisock, &collisionsignal, 1, 0) == -1) exitwerror("sendcol: send", EXIT_ERRNO);
+}
+
+int nocollision(const struct Player* p, int maxy, int maxx) {
+	return withinbounds(p, maxy, maxx) && (!willcollide(p));
 }
 
 int withinbounds(const struct Player* p, int maxy, int maxx) {
@@ -240,12 +254,12 @@ int withinbounds(const struct Player* p, int maxy, int maxx) {
 	return out;
 }
 
-void exitwerror(const char* msg, errtype err) {
+void exitwerror(const char* msg, int exittype) {
 	endwin();
-	if (err == STD) fprintf(stderr, "%s\n", msg);
-	else if (err == PERROR) perror(msg);
+	switch (exittype) {
+		case EXIT_STD: 		fprintf(stderr, "%s\n", msg);
+		case EXIT_ERRNO:	perror(msg);
+	}
 	exit(EXIT_FAILURE);
 }
-
-
 

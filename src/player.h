@@ -1,6 +1,8 @@
 #ifndef PLAYER_H
 #define PLAYER_H
 
+#include <stdint.h>
+
 /* Precondition for usage of file: initscr() has already been called. */
 
 typedef enum _Direction {UP, DOWN, LEFT, RIGHT} Direction;
@@ -41,6 +43,11 @@ void movepl(struct Player* p);
  * Postcondition: p->dir may be modified.
  */
 void checkdirchange(struct Player* p);
+
+/**
+ * Checks if player will collide at next position.
+ */
+int willcollide(const struct Player* p);
 
 #endif // PLAYER_H
 

@@ -46,17 +46,12 @@ void endclients(int* clisocks, int sersock, char winner);
 /* Converts an str to an unsigned short with port-specific error checking. */
 unsigned short strtoport(char* port);
 
-/**
- * Exits with failure status and displays message.
- * If errno is set, perror is used,
- * else message is printed directly to stderr.
- */
-void exitwerror(const char* msg, int useserrno);
+/* Closes server socket and exits program with provided exitcode. */
+void exitserver(int sersock, int exitcode);
 
 int main(int argc, char** argv) {
 	const unsigned short DEFPORT = 1337;		// default port
 
-	puts("Starting server.");
 	// create server
 	int servsock;
 	struct sockaddr_in servaddr;
@@ -69,12 +64,10 @@ int main(int argc, char** argv) {
 	int sockarr[NUMPLAYERS];
 	struct sockaddr_in addrarr[NUMPLAYERS];
 	waitforplayers(servsock, sockarr, addrarr);	// wait for players to connect
-	
-	puts("Sending players numbers.");
+
 	// notify players of their player numbers
 	sendplayernums(sockarr);			// send notification to each player
-	puts("Done.");
-	
+
 	// inital direction values
 	char dirbuffer[SC_STDSIZE];
 	dirbuffer[PLAYER_1] = LEFT;
@@ -89,7 +82,7 @@ int main(int argc, char** argv) {
 }
 
 void createserver(int* servsock, struct sockaddr_in* servaddr, unsigned short port) {
-	if ((*servsock = socket(AF_INET, SOCK_STREAM, 0)) == -1) exitwerror("socket", 1);
+	if ((*servsock = socket(AF_INET, SOCK_STREAM, 0)) == -1) exitwerror("socket", EXIT_ERRNO);
 
 	int enable = 1;
 	if (setsockopt(*servsock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof (int)) == -1)
@@ -104,13 +97,13 @@ void createserver(int* servsock, struct sockaddr_in* servaddr, unsigned short po
 	}
 	servaddr->sin_port = htons(port);
 
-	if (bind(*servsock, (struct sockaddr*) servaddr, sizeof (*servaddr)) == -1) exitwerror("bind", 1);
+	if (bind(*servsock, (struct sockaddr*) servaddr, sizeof (*servaddr)) == -1) exitwerror("bind", EXIT_ERRNO);
 }
 
 void waitforplayers(int servsock, int* sockarr, struct sockaddr_in* addrarr) {
 	// set server to passive
 	const int BACKLOG = 5;
-	if (listen(servsock, BACKLOG) == -1) exitwerror("listen", 1);
+	if (listen(servsock, BACKLOG) == -1) exitwerror("listen", EXIT_ERRNO);
 
 	// wait for connection from 2 players
 	memset(addrarr, 0, sizeof (struct sockaddr_in) * NUMPLAYERS);
@@ -121,13 +114,13 @@ void waitforplayers(int servsock, int* sockarr, struct sockaddr_in* addrarr) {
 	char p2buffer[INET_ADDRSTRLEN];
 
 	sockarr[PLAYER_1] = accept(servsock, (struct sockaddr*) &addrarr[PLAYER_1], &p1len);
-	if (sockarr[PLAYER_1] == -1) exitwerror("accept (Player1)", 1);
+	if (sockarr[PLAYER_1] == -1) exitwerror("accept (Player1)", EXIT_ERRNO);
 
 	if (inet_ntop(AF_INET, &(addrarr[PLAYER_1].sin_addr), p1buffer, INET_ADDRSTRLEN) == NULL) fprintf(stderr, "P1: Couldn't convert.\n");
 	else printf("Player 1 (%s:%u) connected.\n", p1buffer, ntohs(addrarr[PLAYER_1].sin_port));
 
 	sockarr[PLAYER_2] = accept(servsock, (struct sockaddr*) &addrarr[PLAYER_2], &p2len);
-	if (sockarr[PLAYER_2] == -1) exitwerror("accept (Player2)", 1);
+	if (sockarr[PLAYER_2] == -1) exitwerror("accept (Player2)", EXIT_ERRNO);
 
 	if (inet_ntop(AF_INET,&(addrarr[PLAYER_2].sin_addr), p2buffer, INET_ADDRSTRLEN) == NULL) fprintf(stderr, "P2: Couldn't convert.\n");
 	else printf("Player 2 (%s:%u) connected.\n", p2buffer, ntohs(addrarr[PLAYER_2].sin_port));
@@ -137,8 +130,8 @@ void sendplayernums(int* socks) {
 	// wait after both have connected to send notifications
 	char p1 = PLAYER_1;
 	char p2 = PLAYER_2;
-	if (send(socks[PLAYER_1], &p1, 1, 0) == -1) exitwerror("send (player1)", 1);
-	if (send(socks[PLAYER_2], &p2, 1, 0) == -1) exitwerror("send (player2)", 1);
+	if (send(socks[PLAYER_1], &p1, 1, 0) == -1) exitwerror("send (player1)", EXIT_ERRNO);
+	if (send(socks[PLAYER_2], &p2, 1, 0) == -1) exitwerror("send (player2)", EXIT_ERRNO);
 }
 
 void recvclisig(char* dirs, int* clisocks, int sersock) {
@@ -146,19 +139,19 @@ void recvclisig(char* dirs, int* clisocks, int sersock) {
 	int i;
 	for (i = 0; i < NUMPLAYERS; ++i) {
 		int currsock = clisocks[i];
-		if (recv(currsock, &sigtype, 1, 0) == -1) exitwerror("recvclisig", 1);	// check signal type
+		if (recv(currsock, &sigtype, 1, 0) == -1) exitwerror("recvclisig", EXIT_ERRNO);	// check signal type
 
 		switch (sigtype) {
 			case CS_STD: recvvars(&dirs[i], clisocks[i]); break;
 			case CS_COL: endclients(clisocks, sersock, (char)(i == PLAYER_1 ? PLAYER_2 : PLAYER_1)); break;
-			default: exitwerror("recvclisig: invalid signal", 0);
+			default: exitwerror("recvclisig: invalid signal", EXIT_STD);
 		}
 	}
 }
 
 void recvvars(char* dirs, int clisock) {
 	char recvbuffer[CS_STDSIZE];
-	if (recv(clisock, recvbuffer, CS_STDSIZE, 0) == -1) exitwerror("recvvars", 1);
+	if (recv(clisock, recvbuffer, CS_STDSIZE, 0) == -1) exitwerror("recvvars", EXIT_ERRNO);
 	*dirs = recvbuffer[PDIR];							// set new direction for player
 }
 
@@ -167,19 +160,23 @@ void endclients(int* clisocks, int sersock, char winner) {
 	int i;
 	for (i = 0; i < NUMPLAYERS; ++i) {
 		int currsock = clisocks[i];
-		if (send(currsock, &endsig, 1, 0) == -1) exitwerror("endclients: send", 1);	// send signal
-		if (send(currsock, &winner, 1, 0) == -1) exitwerror("endclients: send", 1);	// send winner
+		if (send(currsock, &endsig, 1, 0) == -1) exitwerror("endclients: send", EXIT_ERRNO);	// send signal
+		if (send(currsock, &winner, 1, 0) == -1) exitwerror("endclients: send", EXIT_ERRNO);	// send winner
 	}
+	exitserver(sersock, EXIT_SUCCESS);
+}
+
+void exitserver(int sersock, int exitcode) {
 	close(sersock);
-	exit(EXIT_SUCCESS);
+	exit(exitcode);
 }
 
 void sendvars(int* socks, char* buffer) {
 	char sigtype = SC_STD;
 	int i;
 	for (i = 0; i < NUMPLAYERS; ++i) {
-		if (send(socks[i], &sigtype, 1, 0) == -1) exitwerror("sendvars (sig)", 1);
-		if (send(socks[i], buffer, SC_STDSIZE, 0) == -1) exitwerror("sendvars", 1);
+		if (send(socks[i], &sigtype, 1, 0) == -1) exitwerror("sendvars (sig)", EXIT_ERRNO);
+		if (send(socks[i], buffer, SC_STDSIZE, 0) == -1) exitwerror("sendvars", EXIT_ERRNO);
 	}
 }
 
@@ -191,9 +188,11 @@ unsigned short strtoport(char* str) {
 	return (unsigned short) out;
 }
 
-void exitwerror(const char* msg, int useserrno) {
-	if (useserrno) perror(msg);
-	else fprintf(stderr, "%s\n", msg);
+void exitwerror(const char* msg, int exittype) {
+	switch (exittype) {
+		case EXIT_STD:		fprintf(stderr, "%s\n", msg);
+		case EXIT_ERRNO:	perror(msg);
+	}
 	exit(EXIT_FAILURE);
 }
 

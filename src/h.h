@@ -27,3 +27,11 @@ enum SC_END {			// server-to-client end signal
 	PWIN			// end signal also indicates winning player
 };
 
+enum EXIT_TYPE {
+	EXIT_STD,
+	EXIT_ERRNO
+};
+
+/* Exits program by displaying message. Uses perror if exittype is set. */
+void exitwerror(const char* msg, int exittype);
+

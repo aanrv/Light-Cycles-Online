@@ -32,12 +32,24 @@ void movepl(struct Player* p) {
 
 void checkdirchange(struct Player* p) {
 	int dch = getch();
+	Direction currdir = p->dir;
 	switch (dch) {
-		case KEY_UP:	p->dir = UP; break;
-		case KEY_DOWN:	p->dir = DOWN; break;
-		case KEY_LEFT:	p->dir = LEFT; break;
-		case KEY_RIGHT:	p->dir = RIGHT; break;
-		default:	p->dir = p->dir;	// no input received (if nonblocking)
+		case KEY_UP:	p->dir = currdir != DOWN ? UP : DOWN; break;
+		case KEY_DOWN:	p->dir = currdir != UP ? DOWN : UP; break;
+		case KEY_LEFT:	p->dir = currdir != RIGHT ? LEFT : RIGHT; break;
+		case KEY_RIGHT:	p->dir = currdir != LEFT ? RIGHT :LEFT; break;
+		default:	p->dir = p->dir;					// no input received (if nonblocking)
 	}
+}
+
+int willcollide(const struct Player* p) {
+	struct Player next = *p;
+
+	movepl(&next);
+
+	move(next.loc.y, next.loc.x);
+	char nextch = inch() & A_CHARTEXT;
+
+	return nextch != ' ';
 }
 
