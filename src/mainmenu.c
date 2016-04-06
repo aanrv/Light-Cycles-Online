@@ -3,6 +3,7 @@
 #include "visuals.h"
 
 void displaymenu(void) {
+	clear();
 	buildborder(MENUBORDER);
 
 	const int strlen = 92;
@@ -43,9 +44,9 @@ void displaymenu(void) {
 	refresh();
 }
 
-int getinput(void) {
+enum MenuOpts getinput(void) {
 	nodelay(stdscr, FALSE);
-	int out = 0;
+	enum MenuOpts out = 0;
 	int c = 0;
 	while (c == 0) {
 		c = getch() & A_CHARTEXT;

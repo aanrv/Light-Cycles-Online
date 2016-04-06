@@ -1,9 +1,9 @@
 #ifndef H_H
 #define H_H
 
-static const long PORTMIN = 1024;
-static const long PORTMAX = 65535;
-static const unsigned short DEFPORT = 1337;
+static const long PORTMIN 		= 1024;
+static const long PORTMAX 		= 65535;
+static const unsigned short DEFPORT 	= 1337;
 
 #define NUMPLAYERS 2		// number of players
 enum {PLAYER_1, PLAYER_2};	// player information indices
@@ -35,12 +35,12 @@ enum SC_END {			// server-to-client end signal
 };
 
 enum EXIT_TYPE {
-	EXIT_STD,
-	EXIT_ERRNO
+	EXIT_STD,		// display error message, then exit
+	EXIT_ERRNO		// display error and perror, then exit
 };
 
 /* Exits program by displaying message. Uses perror if exittype is set. */
-void exitwerror(const char* msg, int exittype);
+void exitwerror(const char* msg, enum EXIT_TYPE exittype);
 
 /* Convert string to numerical value with port-specific error checking. */
 unsigned short strtoport(char* str);
