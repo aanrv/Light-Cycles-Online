@@ -38,7 +38,7 @@ void checkdirchange(struct Player* p) {
 		case KEY_DOWN:	p->dir = currdir != UP ? DOWN : UP; break;
 		case KEY_LEFT:	p->dir = currdir != RIGHT ? LEFT : RIGHT; break;
 		case KEY_RIGHT:	p->dir = currdir != LEFT ? RIGHT :LEFT; break;
-		default:	p->dir = p->dir;					// no input received (if nonblocking)
+		default:	p->dir = p->dir;
 	}
 }
 

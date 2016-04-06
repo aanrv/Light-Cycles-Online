@@ -9,6 +9,7 @@
 #include "h.h"			// PLAYER_1, PLAYER_2
 
 enum {APPNAME, PORTNUM};
+enum CollisionType {NONE = -1, COLP1, COLP2, BOTH};
 
 /* Creates server and assigns socket and address. */
 void createserver(int* servsock, struct sockaddr_in* servaddr, unsigned short port);
@@ -16,17 +17,15 @@ void createserver(int* servsock, struct sockaddr_in* servaddr, unsigned short po
 /* Waits for `numplayers` players to connect (currently only 2, but param is still there for future expansion). */
 void waitforplayers(int servsock, int* sockarr, struct sockaddr_in* addrarr);
 
-/* Send players their corresponding player numbers. */
+/* Send players numbers after clients have connected. */
 void sendplayernums(int* socks);
 
-/* Recieve signal from clients.
-   Returns players that collided. 
-   -1 -> no collision, 0 -> P1 collision, 1 -> P2 collision, 2 -> both collided. */
-int recvclisig(char* dirs, int* clisocks);
+/* Recieve signal from clients. Return collision status. */
+enum CollisionType recvclisig(char* dirs, int* clisocks);
 
 /* Recieves variables from player. 
    Handles CS_STD signal. */
-void recvvars(char* dirs, int clisock);
+void recvvars(char* playerdir, int clisock);
 
 /* Sends variables (direction, etc.) to each connected player. */
 void sendvars(int* socks, char* buffer);
@@ -44,34 +43,36 @@ int main(int argc, char** argv) {
 		printf("Port must be between %lu and %lu.\n", PORTMIN, PORTMAX);
 		exitwerror("Invalid port.", EXIT_STD);
 	}
-
 	createserver(&servsock, &servaddr, port);
 
+	printf("Server running on port %u.\n", port);
+	// server will begin accepting clients again after each game
 	for (;;) {
-		putchar('\n');
-		printf("Server running on port %u.\nWaiting for players to connect...\n", port);
-		// wait for players to connect, assign appropriate values
+		puts("\nWaiting for players to connect...");
+
+		// wait for players to connect, then assign appropriate values
 		int sockarr[NUMPLAYERS];
 		struct sockaddr_in addrarr[NUMPLAYERS];
-		waitforplayers(servsock, sockarr, addrarr);	// wait for players to connect
+		waitforplayers(servsock, sockarr, addrarr);
 
 		puts("Game started.");
 
 		// notify players of their player numbers
-		sendplayernums(sockarr);			// send notification to each player
+		sendplayernums(sockarr);
 
 		// inital direction values
 		char dirbuffer[SC_STDSIZE];
 		dirbuffer[PLAYER_1] = RIGHT;
 		dirbuffer[PLAYER_2] = LEFT;
 
+		// keep recieving and sending until a collision signal is recieved
 		int collided = -1;
 		while (collided == -1) {
-
-			sendvars(sockarr, dirbuffer);			// send starting directions
+			sendvars(sockarr, dirbuffer);			// send directions
 			collided = recvclisig(dirbuffer, sockarr);	// recieve client information coming back to server socket
 		}
 
+		// determine winner
 		char winner;
 		switch (collided) {
 			case PLAYER_1: winner = PLAYER_2; break;
@@ -79,6 +80,7 @@ int main(int argc, char** argv) {
 			default: winner = 3;
 		}
 
+		// game over, notify clients
 		endclients(sockarr, winner);
 		puts("Game over.");
 	}
@@ -89,6 +91,7 @@ int main(int argc, char** argv) {
 void createserver(int* servsock, struct sockaddr_in* servaddr, unsigned short port) {
 	if ((*servsock = socket(AF_INET, SOCK_STREAM, 0)) == -1) exitwerror("socket", EXIT_ERRNO);
 
+	// allow port reuse
 	int enable = 1;
 	if (setsockopt(*servsock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof (int)) == -1)
 		fprintf(stderr, "setsockopt: Failed, socket will no reuse port.\n");
@@ -96,7 +99,7 @@ void createserver(int* servsock, struct sockaddr_in* servaddr, unsigned short po
 	memset(servaddr, 0, sizeof (*servaddr));
 	servaddr->sin_family = AF_INET;
 	servaddr->sin_addr.s_addr = htonl(INADDR_ANY);
-	if (port == 0) {				// if port is 0, error is assumed to have occured
+	if (port == 0) {
 		fprintf(stderr, "Port invalid: must be between %lu and %lu.\n", PORTMIN, PORTMAX);
 		exit(EXIT_FAILURE);
 	}
@@ -110,13 +113,14 @@ void waitforplayers(int servsock, int* sockarr, struct sockaddr_in* addrarr) {
 	const int BACKLOG = 5;
 	if (listen(servsock, BACKLOG) == -1) exitwerror("listen", EXIT_ERRNO);
 
-	// wait for connection from 2 players
 	memset(addrarr, 0, sizeof (struct sockaddr_in) * NUMPLAYERS);
 	socklen_t p1len = sizeof (struct sockaddr_in);
 	socklen_t p2len = sizeof (struct sockaddr_in);
 
 	char p1buffer[INET_ADDRSTRLEN];
 	char p2buffer[INET_ADDRSTRLEN];
+
+	// wait for connections from 2 players
 
 	sockarr[PLAYER_1] = accept(servsock, (struct sockaddr*) &addrarr[PLAYER_1], &p1len);
 	if (sockarr[PLAYER_1] == -1) exitwerror("accept (Player1)", EXIT_ERRNO);
@@ -132,34 +136,45 @@ void waitforplayers(int servsock, int* sockarr, struct sockaddr_in* addrarr) {
 }
 
 void sendplayernums(int* socks) {
-	// wait after both have connected to send notifications
 	char p1 = PLAYER_1;
 	char p2 = PLAYER_2;
 	if (send(socks[PLAYER_1], &p1, 1, 0) == -1) exitwerror("send (player1)", EXIT_ERRNO);
 	if (send(socks[PLAYER_2], &p2, 1, 0) == -1) exitwerror("send (player2)", EXIT_ERRNO);
 }
 
-int recvclisig(char* dirs, int* clisocks) {
-	int numcoll = -1;
+enum CollisionType recvclisig(char* dirs, int* clisocks) {
+	enum CollisionType numcoll = -1;
 	char sigtype;
 	int i;
+	// iterate through clients
 	for (i = 0; i < NUMPLAYERS; ++i) {
+		// recieve signal
 		int currsock = clisocks[i];
-		if (recv(currsock, &sigtype, 1, 0) == -1) exitwerror("recvclisig", EXIT_ERRNO);	// check signal type
+		if (recv(currsock, &sigtype, 1, 0) == -1) exitwerror("recvclisig", EXIT_ERRNO);
 
 		switch (sigtype) {
-			case CS_STD: recvvars(&dirs[i], clisocks[i]); break;
-			case CS_COL: numcoll = numcoll == 0 ? 2 : i; break;
+			case CS_STD: recvvars(&dirs[i], clisocks[i]); break;		// standard signal, update variables
+			case CS_COL: numcoll = numcoll == 0 ? 2 : i; break;		// collision occured, determine collision type
 			default: exitwerror("recvclisig: invalid signal", EXIT_STD);
 		}
 	}
 	return numcoll;
 }
 
-void recvvars(char* dirs, int clisock) {
+void recvvars(char* playerdir, int clisock) {
 	char recvbuffer[CS_STDSIZE];
 	if (recv(clisock, recvbuffer, CS_STDSIZE, 0) == -1) exitwerror("recvvars", EXIT_ERRNO);
-	*dirs = recvbuffer[PDIR];							// set new direction for player
+	*playerdir = recvbuffer[PDIR];	// update player direction
+}
+
+
+void sendvars(int* socks, char* buffer) {
+	char sigtype = SC_STD;
+	int i;
+	for (i = 0; i < NUMPLAYERS; ++i) {
+		if (send(socks[i], &sigtype, 1, 0) == -1) exitwerror("sendvars (sig)", EXIT_ERRNO);
+		if (send(socks[i], buffer, SC_STDSIZE, 0) == -1) exitwerror("sendvars", EXIT_ERRNO);
+	}
 }
 
 void endclients(int* clisocks, char winner) {
@@ -172,24 +187,7 @@ void endclients(int* clisocks, char winner) {
 	}
 }
 
-void sendvars(int* socks, char* buffer) {
-	char sigtype = SC_STD;
-	int i;
-	for (i = 0; i < NUMPLAYERS; ++i) {
-		if (send(socks[i], &sigtype, 1, 0) == -1) exitwerror("sendvars (sig)", EXIT_ERRNO);
-		if (send(socks[i], buffer, SC_STDSIZE, 0) == -1) exitwerror("sendvars", EXIT_ERRNO);
-	}
-}
-
-unsigned short strtoport(char* str) {
-	const int BASE = 10;		// conversion base
-	long out = strtol(str, NULL, BASE);
-
-	if (out < PORTMIN || out > PORTMAX) out = 0;
-	return (unsigned short) out;
-}
-
-void exitwerror(const char* msg, int exittype) {
+void exitwerror(const char* msg, enum EXIT_TYPE exittype) {
 	switch (exittype) {
 		case EXIT_STD:		fprintf(stderr, "%s\n", msg); break;
 		case EXIT_ERRNO:	perror(msg); break;

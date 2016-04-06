@@ -4,11 +4,11 @@ FLAGS	= -Wall -Wextra
 
 default: lco-server lco-client
 
-lco-server:	src/lco-server.o
-	$(CC) $(FLAGS) src/lco-server.o -o lco-server $(LIBS)
+lco-server:	src/lco-server.o src/h.o
+	$(CC) $(FLAGS) src/lco-server.o src/h.o -o lco-server $(LIBS)
 
-lco-client:	src/lco-client.o src/visuals.o src/mainmenu.o src/gameovermenu.o src/player.o
-	$(CC) $(FLAGS) src/lco-client.o src/visuals.o src/mainmenu.o src/gameovermenu.o src/player.o -o lco-client $(LIBS)
+lco-client:	src/lco-client.o src/visuals.o src/mainmenu.o src/gameovermenu.o src/player.o src/h.o
+	$(CC) $(FLAGS) src/lco-client.o src/visuals.o src/mainmenu.o src/gameovermenu.o src/player.o src/h.o -o lco-client $(LIBS)
 
 src/lco-server.o:	src/lco-server.c
 	$(CC) $(FLAGS) src/lco-server.c -c -o src/lco-server.o
@@ -27,6 +27,9 @@ src/gameovermenu.o:	src/gameovermenu.c
 
 src/player.o:	src/player.c
 	$(CC) $(FLAGS) src/player.c -c -o src/player.o
+
+src/h.o:	src/h.c
+	$(CC) $(FLAGS) src/h.c -c -o src/h.o
 
 clean:
 	rm -f lco-server lco-client src/*.o

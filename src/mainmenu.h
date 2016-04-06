@@ -7,6 +7,6 @@ enum MenuOpts {PLAY, QUIT};
 void displaymenu(void);
 
 /* Get user menu option. */
-int getinput(void);
+enum MenuOpts getinput(void);
 
 #endif // MAINMENU_H

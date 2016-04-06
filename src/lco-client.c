@@ -20,6 +20,9 @@
 enum {APPNAME, HOSTIP, PORTNUM};
 unsigned char playernum;
 
+/* Initializes ncurses screen and starts the game's graphics. */
+void playgame(int clisock);
+
 /**
  * Connects client socket to server with specified parameters.
  * If straddr is NULL, INADDR_LOOPBACK will be used,
@@ -29,84 +32,89 @@ unsigned char playernum;
  */
 void connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum);
 
-/* Initializes ncurses screen and starts the game's graphics. */
-void playgame(int clisock);
+/* Recieve and return signal from server. */
+char recv_server(int clisock);
 
-/* Recieve signal from server. */
-void recv_server(int clisock, struct Player* players);
+/* Send variables to server. */
+void send_server(int clisock, const struct Player* player);
 
-/* Retrieve variables from server and update accordingly. */
+/* Send collision signal to server. */
+void sendcol(int clisock);
+
+/* Retrieve variables from server and update players accordingly. */
 void updateplayers(int clisock, struct Player* players, int speed);
 
-/* Exit game. */
+/* End ncurses screen and Exit game. */
 void quitgame(void);
 
 /* End game due to collision. */
 void endgame(int clisock);
 
-/* Send variables to server. */
-void send_server(int clisock, struct Player* players);
-
-/* Send collision signal to server. */
-void sendcol(int clisock);
-
-/* Create the curses screen. */
-void createcursesscreen(void);
-
 int main(int argc, char** argv) {
+	// determine port's validity
 	unsigned short port = argc >= 3 ? strtoport(argv[PORTNUM]) : DEFPORT;
 	if (port == 0) exitwerror("Invalid port.", EXIT_STD);
 	
+	// main menu
 	createcursesscreen();
-
 	displaymenu();
-	int c = getinput();
-	
+	enum MenuOpts c = getinput();
 	if (c == QUIT) quitgame();
 
-	// create socket
-	int sock = socket(AF_INET, SOCK_STREAM, 0);
+	// connect client to server
+	int sock = socket(AF_INET, SOCK_STREAM, 0);		// client socket
 	if (sock == -1) exitwerror("socket", EXIT_ERRNO);
-
-	int sersock;			// server socket
-	struct sockaddr_in seraddr;	// server address
-
+	int sersock;						// server socket
+	struct sockaddr_in seraddr;				// server address
 	connecttoserver(sock, port, argc >= 2 ? argv[HOSTIP] : NULL, &sersock, &seraddr, &playernum);
 
+	// both players connected, start game
 	playgame(sock);
 
-	//close(sock);
 	return EXIT_SUCCESS;
 }
 
 void playgame(int clisock) {
-	nodelay(stdscr, TRUE);
+	// getch() should be nonblocking
+	if (nodelay(stdscr, TRUE) == ERR) exitwerror("Unable to set nodelay TRUE.", EXIT_STD);
 	
+	// get window boundaries
 	int maxy;
 	int maxx;
-	getmaxyx(stdscr, maxy, maxx);
+	getmaxyx(stdscr, maxy, maxx);				
 
-	// starting locations of players
+	// create players with starting locations
 	struct Point loc1 = {.x = maxx * 0.25f, .y = maxy / 2};
 	struct Point loc2 = {.x = maxx * 0.75f, .y = maxy / 2};
-
 	struct Player players[NUMPLAYERS];
 	memset(players, 0, sizeof (struct Player) * NUMPLAYERS);
 	players[PLAYER_1] = createpl(loc1, RIGHT, ACS_BLOCK);
 	players[PLAYER_2] = createpl(loc2, LEFT, ACS_BLOCK);
 	
+	// place players on screen and display countdown before beginning
 	clear();
-	redrawscreen(players);
+	redrawplayers(players);
 	displaycountdown(playernum, playernum == PLAYER_1 ? loc1 : loc2);
-
 	buildborder(GAMEBORDER);
-	for (;;) {
-		recv_server(clisock, players);				// receive signal from server
-		checkdirchange(&players[playernum]);			// check if direction changed BEFORE checking for collision
 
-		if (!willcollide(&players[playernum]))	send_server(clisock, players);			// send standard message (variables, etc.) to server
-		else					sendcol(clisock);				// will collide
-		
+	for (;;) {
+		// RECIEVEING FROM SERVER
+		char signal = recv_server(clisock);					// receive signal from server
+		switch (signal) {
+			case SC_STD: updateplayers(clisock, players, 1); break;		// standard signal, update variables and redraw
+			case SC_END: endgame(clisock); break;				// end signal, end the game
+			default: exitwerror("recvsersig: invalid signal", EXIT_STD);
+		}
+
+		checkdirchange(&players[playernum]);					// if Player `plaernum`'s direction has changed, modify it
+
+		// SENDING TO SERVER
+		int collisionflag = willcollide(&players[playernum]);
+		switch (collisionflag) {
+			case 0:	send_server(clisock, &players[playernum]); break;	// if no collision, send standard signal with variables to server
+			case 1: sendcol(clisock); break;				// collision will/has occur(ed), send collision signal to server
+		}
+
 		usleep(refreshrate);
 	}
 }
@@ -131,15 +139,24 @@ void connecttoserver(int clisock, unsigned short port, char* straddr, int* serso
 	if (recv(clisock, playernum, 1, 0) == -1) exitwerror("recv", EXIT_ERRNO);
 }
 
-void recv_server(int clisock, struct Player* players) {
+char recv_server(int clisock) {
 	char sigtype;
 	if (recv(clisock, &sigtype, 1, 0) == -1) exitwerror("recvsersig", EXIT_ERRNO);
+	return sigtype;
+}
 
-	switch (sigtype) {
-		case SC_STD: updateplayers(clisock, players, 1); break;
-		case SC_END: endgame(clisock); break;
-		default: exitwerror("recvsersig: invalid signal", EXIT_STD);
-	}
+void send_server(int clisock, const struct Player* player) {
+	char msgtype = CS_STD;
+	char buffer[CS_STDSIZE];
+	buffer[PDIR] = player->dir;
+
+	if (send(clisock, &msgtype, 1, 0) == -1) exitwerror("send", EXIT_ERRNO);
+	if (send(clisock, buffer, CS_STDSIZE, 0) == -1) exitwerror("send", EXIT_ERRNO);
+}
+
+void sendcol(int clisock) {
+	char collisionsignal = CS_COL;
+	if (send(clisock, &collisionsignal, 1, 0) == -1) exitwerror("sendcol: send", EXIT_ERRNO);
 }
 
 void updateplayers(int clisock, struct Player* players, int speed) {
@@ -157,7 +174,7 @@ void updateplayers(int clisock, struct Player* players, int speed) {
 		movepl(&players[PLAYER_2]);
 
 		// redraw
-		redrawscreen(players);
+		redrawplayers(players);
 	}
 }
 
@@ -181,21 +198,7 @@ void endgame(int clisock) {
 	exit(EXIT_SUCCESS);
 }
 
-void send_server(int clisock, struct Player* players) {
-	char msgtype = CS_STD;
-	char buffer[CS_STDSIZE];
-	buffer[PDIR] = players[playernum].dir;
-
-	if (send(clisock, &msgtype, 1, 0) == -1) exitwerror("send", EXIT_ERRNO);
-	if (send(clisock, buffer, CS_STDSIZE, 0) == -1) exitwerror("send", EXIT_ERRNO);
-}
-
-void sendcol(int clisock) {
-	char collisionsignal = CS_COL;
-	if (send(clisock, &collisionsignal, 1, 0) == -1) exitwerror("sendcol: send", EXIT_ERRNO);
-}
-
-void exitwerror(const char* msg, int exittype) {
+void exitwerror(const char* msg, enum EXIT_TYPE exittype) {
 	endwin();
 	switch (exittype) {
 		case EXIT_STD: 		fprintf(stderr, "%s\n", msg); break;
@@ -205,22 +208,4 @@ void exitwerror(const char* msg, int exittype) {
 }
 
 
-unsigned short strtoport(char* str) {
-	const int BASE = 10;		// conversion base
-	long out = strtol(str, NULL, BASE);
-
-	if (out < PORTMIN || out > PORTMAX) out = 0;
-	return (unsigned short) out;
-}
-
-void createcursesscreen(void) {
-	// initialize curses window and set screen options
-	if (initscr() == NULL) exitwerror("Unable to initialize curses window.\n", EXIT_STD);
-	if (!setscreen()) exitwerror("Unable to set screen settings.", EXIT_STD);	
-
-	if (has_colors()) {
-		start_color();
-		assigncolors();
-	}
-}
 
