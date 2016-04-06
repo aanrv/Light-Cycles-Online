@@ -5,7 +5,7 @@
 void displaymenu(void) {
 	buildborder(MENUBORDER);
 
-	const int strlen = 87;
+	const int strlen = 92;
 	int maxy;
 	int maxx;
 	getmaxyx(stdscr, maxy, maxx);
@@ -13,17 +13,17 @@ void displaymenu(void) {
 
 	// main title
 	attron(COLOR_PAIR(MENUTITLE) | A_BOLD);
-	move(3, midlocx);	printw("@@@@@@@@@@@@@@@           @                           @ @ @");
-	move(4, midlocx);	printw("       @                  @                         @       @");
-	move(5, midlocx);	printw("       @                  @                       @          @");
-	move(6, midlocx);	printw("       @                  @                      @");
-	move(7, midlocx);	printw("       @                  @                     @");
-	move(8, midlocx);	printw("       @                  @                     @");
-	move(9, midlocx);	printw("       @  @@   @@@ @   @  @      @ @@@ @ @ @@@  @              @   @   @@  @   @@@   @@");
-	move(10, midlocx);	printw("       @  @ @  @ @ @@  @  @      @ @   @ @  @    @              @ @   @  @ @   @    @");
-	move(11, midlocx);	printw("       @  @@   @ @ @ @ @  @      @ @ @ @@@  @     @          @   @   @     @   @@    @");
-	move(12, midlocx);	printw("       @  @ @  @ @ @  @@  @      @ @ @ @ @  @       @       @    @   @   @ @   @      @");
-	move(13, midlocx);	printw("       @  @  @ @@@ @   @  @@@@@@ @ @@@ @ @  @         @ @ @      @    @@@  @@@ @@@  @@");
+	move(3, midlocx);	printw("@@@@@@@@@@@@@@@             @                             @ @ @");
+	move(4, midlocx);	printw("       @                    @                           @       @");
+	move(5, midlocx);	printw("       @                    @                         @          @");
+	move(6, midlocx);	printw("       @                    @                        @");
+	move(7, midlocx);	printw("       @                    @                       @");
+	move(8, midlocx);	printw("       @                    @                       @");
+	move(9, midlocx);	printw("       @  @@   @@@ @   @    @      @ @@@ @ @ @@@    @              @   @   @@  @   @@@   @@@");
+	move(10, midlocx);	printw("       @  @ @  @ @ @@  @    @      @ @   @ @  @      @              @ @   @  @ @   @    @");
+	move(11, midlocx);	printw("       @  @@   @ @ @ @ @    @      @ @ @ @@@  @       @          @   @   @     @   @@    @");
+	move(12, midlocx);	printw("       @  @ @  @ @ @  @@    @      @ @ @ @ @  @         @       @    @   @   @ @   @      @");
+	move(13, midlocx);	printw("       @  @  @ @@@ @   @    @@@@@@ @ @@@ @ @  @           @ @ @      @    @@@  @@@ @@@ @@@");
 	attroff(COLOR_PAIR(MENUTITLE) | A_BOLD);
 	
 	char playmsg[] = "PRESS [SPACE] TO BEGIN";

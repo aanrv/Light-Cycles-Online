@@ -10,8 +10,6 @@
 
 enum {APPNAME, PORTNUM};
 
-const unsigned short DEFPORT = 1337;		// default port to use if not provided
-
 /* Creates server and assigns socket and address. */
 void createserver(int* servsock, struct sockaddr_in* servaddr, unsigned short port);
 
@@ -38,24 +36,26 @@ void sendvars(int* socks, char* buffer);
 void endclients(int* clisocks, char winner);
 
 int main(int argc, char** argv) {
-	const unsigned short DEFPORT = 1337;
-
 	// create server
 	int servsock;
 	struct sockaddr_in servaddr;
 	unsigned short port = argc >= 2 ? strtoport(argv[PORTNUM]) : DEFPORT;
-	if (port == 0) exitwerror("Invalid port.", EXIT_STD);
+	if (port == 0) {
+		printf("Port must be between %lu and %lu.\n", PORTMIN, PORTMAX);
+		exitwerror("Invalid port.", EXIT_STD);
+	}
 
 	createserver(&servsock, &servaddr, port);
 
-	printf("Server running on port %u.\nWaiting for players to connect...\n", port);
-
 	for (;;) {
 		putchar('\n');
+		printf("Server running on port %u.\nWaiting for players to connect...\n", port);
 		// wait for players to connect, assign appropriate values
 		int sockarr[NUMPLAYERS];
 		struct sockaddr_in addrarr[NUMPLAYERS];
 		waitforplayers(servsock, sockarr, addrarr);	// wait for players to connect
+
+		puts("Game started.");
 
 		// notify players of their player numbers
 		sendplayernums(sockarr);			// send notification to each player
@@ -80,6 +80,7 @@ int main(int argc, char** argv) {
 		}
 
 		endclients(sockarr, winner);
+		puts("Game over.");
 	}
 
 	return EXIT_SUCCESS;

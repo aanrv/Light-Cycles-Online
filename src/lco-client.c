@@ -17,7 +17,7 @@
 #include "gameovermenu.h"
 #include "h.h"
 
-enum {APPNAME, PORTNUM, HOSTIP};
+enum {APPNAME, HOSTIP, PORTNUM};
 unsigned char playernum;
 
 /**
@@ -54,7 +54,8 @@ void sendcol(int clisock);
 void createcursesscreen(void);
 
 int main(int argc, char** argv) {
-	if (argc < 2) { fprintf(stderr, "Usage: %s portnum [host ip]\n", argv[0]); exit(EXIT_FAILURE); }
+	unsigned short port = argc >= 3 ? strtoport(argv[PORTNUM]) : DEFPORT;
+	if (port == 0) exitwerror("Invalid port.", EXIT_STD);
 	
 	createcursesscreen();
 
@@ -70,7 +71,7 @@ int main(int argc, char** argv) {
 	int sersock;			// server socket
 	struct sockaddr_in seraddr;	// server address
 
-	connecttoserver(sock, atoi(argv[PORTNUM]), argc >= 3 ? argv[HOSTIP] : NULL, &sersock, &seraddr, &playernum);
+	connecttoserver(sock, port, argc >= 2 ? argv[HOSTIP] : NULL, &sersock, &seraddr, &playernum);
 
 	playgame(sock);
 
@@ -101,13 +102,11 @@ void playgame(int clisock) {
 	buildborder(GAMEBORDER);
 	for (;;) {
 		recv_server(clisock, players);				// receive signal from server
-		checkdirchange(&players[playernum]);			// FIRST, check for a direction change
+		checkdirchange(&players[playernum]);			// check if direction changed BEFORE checking for collision
 
-		if (!willcollide(&players[playernum])) {		// AFTER, make sure no collision will occur
-			send_server(clisock, players);			// send standard message (variables, etc.) to server
-		} else {
-			sendcol(clisock);				// will collide
-		}
+		if (!willcollide(&players[playernum]))	send_server(clisock, players);			// send standard message (variables, etc.) to server
+		else					sendcol(clisock);				// will collide
+		
 		usleep(refreshrate);
 	}
 }
@@ -124,7 +123,7 @@ void connecttoserver(int clisock, unsigned short port, char* straddr, int* serso
 
 	// connect to server
 	*sersock = connect(clisock, (struct sockaddr*) seraddr, sizeof (*seraddr));
-	if (*sersock == -1) exitwerror("Make sure the server is running and you are connecting to the correct port!\nconnect", EXIT_ERRNO);
+	if (*sersock == -1) exitwerror("Make sure the server is running and you are connecting to the correct port.\nconnect", EXIT_ERRNO);
 
 	displayconnected();
 
@@ -199,8 +198,8 @@ void sendcol(int clisock) {
 void exitwerror(const char* msg, int exittype) {
 	endwin();
 	switch (exittype) {
-		case EXIT_STD: 		fprintf(stderr, "%s\n", msg);
-		case EXIT_ERRNO:	perror(msg);
+		case EXIT_STD: 		fprintf(stderr, "%s\n", msg); break;
+		case EXIT_ERRNO:	perror(msg); break;
 	}
 	exit(EXIT_FAILURE);
 }

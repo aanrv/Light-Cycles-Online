@@ -4,7 +4,7 @@
 #include "player.h"
 #include "h.h"
 
-const int refreshrate = 10000;
+const int refreshrate = 70000;
 const char playerchar = '+';
 
 void assigncolors(void) {

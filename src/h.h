@@ -3,6 +3,7 @@
 
 static const long PORTMIN = 1024;
 static const long PORTMAX = 65535;
+static const unsigned short DEFPORT = 1337;
 
 #define NUMPLAYERS 2		// number of players
 enum {PLAYER_1, PLAYER_2};	// player information indices
