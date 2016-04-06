@@ -22,7 +22,7 @@ Runs on Linux and Mac.
 
 #  Installation
 
-Simply run `make` to create the server and the client executables.
+Simply run `make` to create the server and client executables.
 
 # Starting the Game
 
