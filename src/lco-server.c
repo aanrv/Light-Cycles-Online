@@ -43,43 +43,46 @@ int main(int argc, char** argv) {
 	// create server
 	int servsock;
 	struct sockaddr_in servaddr;
-	unsigned short port = argc == 2 ? strtoport(argv[PORTNUM]) : DEFPORT;
+	unsigned short port = argc >= 2 ? strtoport(argv[PORTNUM]) : DEFPORT;
 	if (port == 0) exitwerror("Invalid port.", EXIT_STD);
 
 	createserver(&servsock, &servaddr, port);
 
-	puts("Server started.\nWaiting for players to connect...");
+	printf("Server running on port %u.\nWaiting for players to connect...\n", port);
 
-	// wait for players to connect, assign appropriate values
-	int sockarr[NUMPLAYERS];
-	struct sockaddr_in addrarr[NUMPLAYERS];
-	waitforplayers(servsock, sockarr, addrarr);	// wait for players to connect
+	for (;;) {
+		putchar('\n');
+		// wait for players to connect, assign appropriate values
+		int sockarr[NUMPLAYERS];
+		struct sockaddr_in addrarr[NUMPLAYERS];
+		waitforplayers(servsock, sockarr, addrarr);	// wait for players to connect
 
-	// notify players of their player numbers
-	sendplayernums(sockarr);			// send notification to each player
+		// notify players of their player numbers
+		sendplayernums(sockarr);			// send notification to each player
 
-	// inital direction values
-	char dirbuffer[SC_STDSIZE];
-	dirbuffer[PLAYER_1] = RIGHT;
-	dirbuffer[PLAYER_2] = LEFT;
+		// inital direction values
+		char dirbuffer[SC_STDSIZE];
+		dirbuffer[PLAYER_1] = RIGHT;
+		dirbuffer[PLAYER_2] = LEFT;
 
-	int collided = -1;
-	while (collided == -1) {
-		sendvars(sockarr, dirbuffer);			// send starting directions
-		collided = recvclisig(dirbuffer, sockarr);	// recieve client information coming back to server socket
+		int collided = -1;
+		while (collided == -1) {
+
+			sendvars(sockarr, dirbuffer);			// send starting directions
+			collided = recvclisig(dirbuffer, sockarr);	// recieve client information coming back to server socket
+		}
+
+		char winner;
+		switch (collided) {
+			case PLAYER_1: winner = PLAYER_2; break;
+			case PLAYER_2: winner = PLAYER_1; break;
+			default: winner = 3;
+		}
+
+		endclients(sockarr, winner);
 	}
 
-	char winner;
-	switch (collided) {
-		case PLAYER_1: winner = PLAYER_2; break;
-		case PLAYER_2: winner = PLAYER_1; break;
-		default: winner = 3;
-	}
-	
-	endclients(sockarr, winner);
-	
-	close(servsock);
-	return 0;
+	return EXIT_SUCCESS;
 }
 
 void createserver(int* servsock, struct sockaddr_in* servaddr, unsigned short port) {
@@ -187,8 +190,8 @@ unsigned short strtoport(char* str) {
 
 void exitwerror(const char* msg, int exittype) {
 	switch (exittype) {
-		case EXIT_STD:		fprintf(stderr, "%s\n", msg);
-		case EXIT_ERRNO:	perror(msg);
+		case EXIT_STD:		fprintf(stderr, "%s\n", msg); break;
+		case EXIT_ERRNO:	perror(msg); break;
 	}
 	exit(EXIT_FAILURE);
 }

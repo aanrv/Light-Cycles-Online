@@ -4,4 +4,6 @@ lco-client
 lco-client.o
 visuals.o
 player.o
+mainmenu.o
+gameovermenu.o
 

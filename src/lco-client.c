@@ -13,9 +13,12 @@
 #include <ncurses.h>
 #include "player.h"
 #include "visuals.h"
-#include "h.h"			// PLAYER_1, PLAYER_2
+#include "mainmenu.h"
+#include "gameovermenu.h"
+#include "h.h"
 
-enum {APPNAME, PORTNUM, HOSTIP};			// args
+enum {APPNAME, PORTNUM, HOSTIP};
+unsigned char playernum;
 
 /**
  * Connects client socket to server with specified parameters.
@@ -27,25 +30,38 @@ enum {APPNAME, PORTNUM, HOSTIP};			// args
 void connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum);
 
 /* Initializes ncurses screen and starts the game's graphics. */
-void playgame(int clisock, const unsigned char playernum);
+void playgame(int clisock);
 
 /* Recieve signal from server. */
 void recv_server(int clisock, struct Player* players);
 
 /* Retrieve variables from server and update accordingly. */
-void updateplayers(int clisock, struct Player* players);
+void updateplayers(int clisock, struct Player* players, int speed);
 
-/* Properly terminate game. */
-void quitgame(int clisock);
+/* Exit game. */
+void quitgame(void);
+
+/* End game due to collision. */
+void endgame(int clisock);
 
 /* Send variables to server. */
-void send_server(int clisock, struct Player* players, const unsigned char playernum);
+void send_server(int clisock, struct Player* players);
 
 /* Send collision signal to server. */
 void sendcol(int clisock);
 
+/* Create the curses screen. */
+void createcursesscreen(void);
+
 int main(int argc, char** argv) {
 	if (argc < 2) { fprintf(stderr, "Usage: %s portnum [host ip]\n", argv[0]); exit(EXIT_FAILURE); }
+	
+	createcursesscreen();
+
+	displaymenu();
+	int c = getinput();
+	
+	if (c == QUIT) quitgame();
 
 	// create socket
 	int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -53,33 +69,21 @@ int main(int argc, char** argv) {
 
 	int sersock;			// server socket
 	struct sockaddr_in seraddr;	// server address
-	unsigned char playernum;	// will hold PLAYER_1 or PLAYER_2 after connecting
 
 	connecttoserver(sock, atoi(argv[PORTNUM]), argc >= 3 ? argv[HOSTIP] : NULL, &sersock, &seraddr, &playernum);
 
-	playgame(sock, playernum);
+	playgame(sock);
 
 	//close(sock);
 	return EXIT_SUCCESS;
 }
 
-void playgame(int clisock, const unsigned char playernum) {
-	int i;
-	const int countdown = 3;
-	puts("Starting...");
-	for (i = countdown; i > 0; --i) { printf("%d ", i); fflush(stdout); sleep(1); }
-
-	if (initscr() == NULL) exitwerror("Unable to initialize curses window.\n", EXIT_STD);
-
-	if (has_colors()) start_color();
-	assigncolors();
-	buildborder();
-
+void playgame(int clisock) {
+	nodelay(stdscr, TRUE);
+	
 	int maxy;
 	int maxx;
 	getmaxyx(stdscr, maxy, maxx);
-
-	if (!setscreen()) exitwerror("Unable to set screen settings.", EXIT_STD);
 
 	// starting locations of players
 	struct Point loc1 = {.x = maxx * 0.25f, .y = maxy / 2};
@@ -89,13 +93,18 @@ void playgame(int clisock, const unsigned char playernum) {
 	memset(players, 0, sizeof (struct Player) * NUMPLAYERS);
 	players[PLAYER_1] = createpl(loc1, RIGHT, ACS_BLOCK);
 	players[PLAYER_2] = createpl(loc2, LEFT, ACS_BLOCK);
+	
+	clear();
+	redrawscreen(players);
+	displaycountdown(playernum, playernum == PLAYER_1 ? loc1 : loc2);
 
+	buildborder(GAMEBORDER);
 	for (;;) {
 		recv_server(clisock, players);				// receive signal from server
 		checkdirchange(&players[playernum]);			// FIRST, check for a direction change
 
-		if (!willcollide(&players[playernum])) {	// AFTER, make sure no collision will occur
-			send_server(clisock, players, playernum);	// send standard message (variables, etc.) to server
+		if (!willcollide(&players[playernum])) {		// AFTER, make sure no collision will occur
+			send_server(clisock, players);			// send standard message (variables, etc.) to server
 		} else {
 			sendcol(clisock);				// will collide
 		}
@@ -115,16 +124,12 @@ void connecttoserver(int clisock, unsigned short port, char* straddr, int* serso
 
 	// connect to server
 	*sersock = connect(clisock, (struct sockaddr*) seraddr, sizeof (*seraddr));
-	if (*sersock == -1) exitwerror("connect", EXIT_ERRNO);
+	if (*sersock == -1) exitwerror("Make sure the server is running and you are connecting to the correct port!\nconnect", EXIT_ERRNO);
+
+	displayconnected();
 
 	// receive notification
 	if (recv(clisock, playernum, 1, 0) == -1) exitwerror("recv", EXIT_ERRNO);
-
-	switch (*playernum) {
-		case PLAYER_1: puts("Connected as Player 1."); break;
-		case PLAYER_2: puts("Connected as Player 2."); break;
-		default: exitwerror("Received invalid player number", EXIT_STD);
-	}
 }
 
 void recv_server(int clisock, struct Player* players) {
@@ -132,45 +137,52 @@ void recv_server(int clisock, struct Player* players) {
 	if (recv(clisock, &sigtype, 1, 0) == -1) exitwerror("recvsersig", EXIT_ERRNO);
 
 	switch (sigtype) {
-		case SC_STD: updateplayers(clisock, players); break;
-		case SC_END: quitgame(clisock); break;
+		case SC_STD: updateplayers(clisock, players, 1); break;
+		case SC_END: endgame(clisock); break;
 		default: exitwerror("recvsersig: invalid signal", EXIT_STD);
 	}
 }
 
-void updateplayers(int clisock, struct Player* players) {
+void updateplayers(int clisock, struct Player* players, int speed) {
 	char buffer[SC_STDSIZE];
 	if (recv(clisock, buffer, SC_STDSIZE, 0) == -1) exitwerror("recv", EXIT_ERRNO);
 
-	// modify direction
-	players[PLAYER_1].dir = buffer[P1DIR];
-	players[PLAYER_2].dir = buffer[P2DIR];
+	int i;
+	for (i = 0; i < speed; ++i) {
+		// modify direction
+		players[PLAYER_1].dir = buffer[P1DIR];
+		players[PLAYER_2].dir = buffer[P2DIR];
 
-	// modify location
-	movepl(&players[PLAYER_1]);
-	movepl(&players[PLAYER_2]);
+		// modify location
+		movepl(&players[PLAYER_1]);
+		movepl(&players[PLAYER_2]);
 
-	// redraw
-	redrawscreen(players);
+		// redraw
+		redrawscreen(players);
+	}
 }
 
-void quitgame(int clisock) {
+void quitgame(void) {
 	endwin();
-
-	// determine winning player
-	char winner;
-	if (recv(clisock, &winner, 1, 0) == -1) exitwerror("quitgame: recv", EXIT_ERRNO);
-
-	switch (winner) {
-		case 3: puts("Draw!"); break;
-		default: printf("Player %d wins!\n", winner + 1);
-	}
-
-	close(clisock);
+	puts("\nGoodbye!");
 	exit(EXIT_SUCCESS);
 }
 
-void send_server(int clisock, struct Player* players, const unsigned char playernum) {
+void endgame(int clisock) {
+	// determine winning player
+	char winner;
+	if (recv(clisock, &winner, 1, 0) == -1) exitwerror("endgame: recv", EXIT_ERRNO);
+
+	close(clisock);
+
+	usleep(750000);
+	showgameover(winner, playernum);
+
+	endwin();
+	exit(EXIT_SUCCESS);
+}
+
+void send_server(int clisock, struct Player* players) {
 	char msgtype = CS_STD;
 	char buffer[CS_STDSIZE];
 	buffer[PDIR] = players[playernum].dir;
@@ -200,5 +212,16 @@ unsigned short strtoport(char* str) {
 
 	if (out < PORTMIN || out > PORTMAX) out = 0;
 	return (unsigned short) out;
+}
+
+void createcursesscreen(void) {
+	// initialize curses window and set screen options
+	if (initscr() == NULL) exitwerror("Unable to initialize curses window.\n", EXIT_STD);
+	if (!setscreen()) exitwerror("Unable to set screen settings.", EXIT_STD);	
+
+	if (has_colors()) {
+		start_color();
+		assigncolors();
+	}
 }
 
