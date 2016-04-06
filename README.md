@@ -5,8 +5,8 @@
 An implementation of the Tron Light Cycles game.
 The graphics are text based and were designed using `ncurses`.
 
-It is a LAN multiplayer game.
-Server and client were written using `socket`.
+It is a multiplayer LAN game.
+Server and client were written using the C Sockets API.
 
 Runs on Linux and Mac.
 
