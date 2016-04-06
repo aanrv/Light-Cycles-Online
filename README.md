@@ -1,8 +1,6 @@
 # Tron-Light-Cycles-Online
 
-![Menu](img/lco_menu.png)
-
-![Game](img/lco_gameplay.png)
+![Menu](img/lco_menu.png) ![Game](img/lco_gameplay.png)
 
 An implementation of the Tron Light Cycles game.
 The graphics are text based and were designed using `ncurses`.
