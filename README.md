@@ -16,7 +16,7 @@ Runs on Linux and Mac.
 
 | OS / Distro    | Installation                          |
 | -------------- | ------------------------------------- |
-| Mac            | Should be included in the [XCode Tools](https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man3/ncurses.3x.html).|
+| Mac            | Should be included in the [Xcode Tools](https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man3/ncurses.3x.html).|
 | Ubuntu/Debian  | `apt-get install libncurses5-dev`     |
 | Fedora         | `yum install ncurses-devel`           |
 
