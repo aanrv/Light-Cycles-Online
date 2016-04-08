@@ -50,7 +50,7 @@ void sendcol(int clisock);
 void updateplayers(int clisock, struct Player* players, int speed);
 
 /* End ncurses screen, close socket if opened (-1 indicates not opened yet) and exit game. */
-void quitgame();
+void quitgame(void);
 
 /* End game due to collision. */
 void endgame(int clisock);
@@ -103,6 +103,7 @@ void playgame(int clisock) {
 	struct Point loc2 = {.x = maxx * 0.75f, .y = maxy / 2};
 	struct Player players[NUMPLAYERS];
 	memset(players, 0, sizeof (struct Player) * NUMPLAYERS);
+
 	players[PLAYER_1] = createpl(loc1, RIGHT, playerchar);
 	players[PLAYER_2] = createpl(loc2, LEFT, playerchar);
 
@@ -224,6 +225,4 @@ void exitwerror(const char* msg, enum EXIT_TYPE exittype) {
 	}
 	exit(EXIT_FAILURE);
 }
-
-
 

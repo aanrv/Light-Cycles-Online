@@ -5,8 +5,8 @@
 An implementation of the Tron Light Cycles game.
 The graphics are text based and were designed using `ncurses`.
 
-It is a LAN multiplayer game.
-Server and client were written using `socket`.
+It is a multiplayer LAN game.
+Server and client were written using the C Sockets API.
 
 Runs on Linux and Mac.
 
@@ -16,13 +16,13 @@ Runs on Linux and Mac.
 
 | OS / Distro    | Installation                          |
 | -------------- | ------------------------------------- |
-| Mac            | Should be included in the [XCode Tools](https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man3/ncurses.3x.html).|
+| Mac            | Should be included in the [Xcode Tools](https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man3/ncurses.3x.html).|
 | Ubuntu/Debian  | `apt-get install libncurses5-dev`     |
 | Fedora         | `yum install ncurses-devel`           |
 
 #  Installation
 
-Simply run `make` to create the server and the client executables.
+Simply run `make` to create the server and client executables.
 
 # Starting the Game
 

@@ -64,9 +64,6 @@ void displaycountdown(const char playernum, struct Point loc) {
 	attroff(COLOR_PAIR(MENUPLAY) | A_BOLD);
 
 	refresh();
-	
-	buildborder(GAMEBORDER);
-	
 	sleep(1);
 
 	int countdown = 3;
