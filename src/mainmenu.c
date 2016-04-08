@@ -28,18 +28,22 @@ void displaymenu(void) {
 	attroff(COLOR_PAIR(MENUTITLE) | A_BOLD);
 	
 	char playmsg[] = "PRESS [SPACE] TO BEGIN";
+	char instmsg[] = "PRESS I FOR INSTRUCTIONS";
 	char quitmsg[] = "PRESS Q TO QUIT";
+	
+	attron(A_BOLD);
+	
 	// press any key to begin
 	move((maxy * 0.75f) - 1, (maxx / 2) - (sizeof (playmsg) / 2));
-	attron(COLOR_PAIR(MENUPLAY) | A_BOLD);
 	printw("%s", playmsg);
-	attroff(COLOR_PAIR(MENUPLAY) | A_BOLD);
 	
-	// press q to quit
-	attron(COLOR_PAIR(MENUQUIT) | A_BOLD);
-	move((maxy * 0.75f) + 1, (maxx / 2) - (sizeof (quitmsg) / 2));
+	move((maxy * 0.75f) + 1, (maxx / 2) - (sizeof (instmsg) / 2));
+	printw("%s", instmsg);
+	
+	move((maxy * 0.75f) + 3, (maxx / 2) - (sizeof (quitmsg) / 2));
 	printw("%s", quitmsg);
-	attroff(COLOR_PAIR(MENUQUIT) | A_BOLD);
+	
+	attroff(A_BOLD);
 	
 	refresh();
 }
@@ -52,6 +56,7 @@ enum MenuOpts getinput(void) {
 		c = getch() & A_CHARTEXT;
 		switch (c) {
 			case ' ':	out = PLAY; break;
+			case 'i':	out = INSTRUCTIONS; break;
 			case 'q':	out = QUIT; break;
 			default:	c = 0;
 		}

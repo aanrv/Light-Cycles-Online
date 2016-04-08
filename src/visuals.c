@@ -19,12 +19,14 @@ void createcursesscreen(void) {
 }
 
 int setscreen(void) {
-	if (wresize(stdscr, 30, 100) == ERR) return 0;	// set window size
-	if (nodelay(stdscr, TRUE) == ERR) return 0;	// don't block getch
-	if (curs_set(0) == ERR) return 0;		// hide cursor
-	if (cbreak() == ERR) return 0;			// disable line buffering
-	if (keypad(stdscr, 1) == ERR) return 0;		// enable user terminal
-	if (noecho() == ERR) return 0;			// keyboard inputs shouldn't be displayed
+	const int screenlen	= 30;
+	const int screenheight	= 100;
+	if (wresize(stdscr, screenlen, screenheight)	== ERR) return 0;	// set window size
+	if (nodelay(stdscr, TRUE)			== ERR) return 0;	// don't block getch
+	if (curs_set(FALSE)				== ERR) return 0;	// hide cursor
+	if (cbreak()					== ERR) return 0;	// disable line buffering
+	if (keypad(stdscr, TRUE)			== ERR) return 0;	// enable user terminal
+	if (noecho()					== ERR) return 0;	// keyboard inputs shouldn't be displayed
 	return 1;
 }
 
@@ -44,26 +46,6 @@ void redrawplayers(struct Player* players) {
 	refresh();
 }
 
-void displayconnected(void) {
-	clear();
-	buildborder(MENUBORDER);
-	
-	int maxy;
-	int maxx;
-	getmaxyx(stdscr, maxy, maxx);
-	
-	char connectedserv[] = "Connected to server.";
-	char waiting[] = "Waiting for other players...";
-	
-	move(maxy / 2, (maxx / 2) - (sizeof (connectedserv) / 2));
-	printw("%s", connectedserv);
-	
-	move(maxy / 2 + 1, (maxx / 2) - (sizeof (waiting) / 2));
-	printw("%s", waiting);
-	
-	refresh();
-}
-
 void displaycountdown(const char playernum, struct Point loc) {
 	buildborder(GAMEBORDER);
 	
@@ -71,20 +53,21 @@ void displaycountdown(const char playernum, struct Point loc) {
 	int maxx;
 	getmaxyx(stdscr, maxy, maxx);
 	
-	// print player number
 	const int strsize = 17;
-	move(maxy / 2 - 2, (maxx / 2) - (strsize / 2));
+	move(maxy * 0.25f, (maxx / 2) - (strsize / 2));
 	printw("YOU ARE PLAYER %d!", playernum + 1);
-	refresh();
 	
-	usleep(500000);
-	
-	// show arrow
+	// show arrow indicating player location
 	move(loc.y + 1, loc.x);
 	attron(COLOR_PAIR(MENUPLAY) | A_BOLD);
 	addch(ACS_UARROW);
 	attroff(COLOR_PAIR(MENUPLAY) | A_BOLD);
+
 	refresh();
+	
+	buildborder(GAMEBORDER);
+	
+	sleep(1);
 
 	int countdown = 3;
 	do {
@@ -101,7 +84,9 @@ void displaycountdown(const char playernum, struct Point loc) {
 void buildborder(int colorpair) {
 	int border_attr = COLOR_PAIR(colorpair) | A_BOLD | A_INVIS;
 	if (has_colors()) attron(border_attr);
+
 	border(ACS_VLINE, ACS_VLINE, ACS_HLINE, ACS_HLINE, ACS_ULCORNER, ACS_URCORNER, ACS_LLCORNER, ACS_LRCORNER);
+
 	if (has_colors()) attroff(border_attr);
 	refresh();
 }

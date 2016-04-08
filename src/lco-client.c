@@ -14,11 +14,16 @@
 #include "player.h"
 #include "visuals.h"
 #include "mainmenu.h"
+#include "connectionmenu.h"
+#include "instructionsmenu.h"
 #include "gameovermenu.h"
 #include "h.h"
 
 enum {APPNAME, HOSTIP, PORTNUM};
 unsigned char playernum;
+
+/* Navigate main menu and sub menus until player decides to play. */
+void loopmenu(void);
 
 /* Initializes ncurses screen and starts the game's graphics. */
 void playgame(int clisock);
@@ -30,13 +35,13 @@ void playgame(int clisock);
  * sersock and seraddr will be set to the server socket and server address respectively.
  * playernum will be set to either PLAYER_1 or PLAYER_2.
  */
-void connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum);
+int connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum);
 
 /* Recieve and return signal from server. */
-char recv_server(int clisock);
+char recvserversignal(int clisock);
 
 /* Send variables to server. */
-void send_server(int clisock, const struct Player* player);
+void sendtoserver(int clisock, const struct Player* player);
 
 /* Send collision signal to server. */
 void sendcol(int clisock);
@@ -44,8 +49,8 @@ void sendcol(int clisock);
 /* Retrieve variables from server and update players accordingly. */
 void updateplayers(int clisock, struct Player* players, int speed);
 
-/* End ncurses screen and Exit game. */
-void quitgame(void);
+/* End ncurses screen, close socket if opened (-1 indicates not opened yet) and exit game. */
+void quitgame();
 
 /* End game due to collision. */
 void endgame(int clisock);
@@ -54,19 +59,19 @@ int main(int argc, char** argv) {
 	// determine port's validity
 	unsigned short port = argc >= 3 ? strtoport(argv[PORTNUM]) : DEFPORT;
 	if (port == 0) exitwerror("Invalid port.", EXIT_STD);
-	
-	// main menu
-	createcursesscreen();
-	displaymenu();
-	enum MenuOpts c = getinput();
-	if (c == QUIT) quitgame();
 
-	// connect client to server
 	int sock = socket(AF_INET, SOCK_STREAM, 0);		// client socket
 	if (sock == -1) exitwerror("socket", EXIT_ERRNO);
 	int sersock;						// server socket
 	struct sockaddr_in seraddr;				// server address
-	connecttoserver(sock, port, argc >= 2 ? argv[HOSTIP] : NULL, &sersock, &seraddr, &playernum);
+
+	// main menu, wait for user to connect
+	createcursesscreen();
+	int connected;
+	do {
+		loopmenu();
+		connected = connecttoserver(sock, port, argc >= 2 ? argv[HOSTIP] : NULL, &sersock, &seraddr, &playernum);
+	} while (!connected);
 
 	// both players connected, start game
 	playgame(sock);
@@ -74,10 +79,20 @@ int main(int argc, char** argv) {
 	return EXIT_SUCCESS;
 }
 
+void loopmenu(void) {
+	int c;
+	do {
+		displaymenu();
+		c = getinput();
+		if (c == INSTRUCTIONS)	showinstructions();
+		else if (c == QUIT)	quitgame();
+	} while (c != PLAY);
+}
+
 void playgame(int clisock) {
 	// getch() should be nonblocking
 	if (nodelay(stdscr, TRUE) == ERR) exitwerror("Unable to set nodelay TRUE.", EXIT_STD);
-	
+
 	// get window boundaries
 	int maxy;
 	int maxx;
@@ -88,9 +103,9 @@ void playgame(int clisock) {
 	struct Point loc2 = {.x = maxx * 0.75f, .y = maxy / 2};
 	struct Player players[NUMPLAYERS];
 	memset(players, 0, sizeof (struct Player) * NUMPLAYERS);
-	players[PLAYER_1] = createpl(loc1, RIGHT, ACS_BLOCK);
-	players[PLAYER_2] = createpl(loc2, LEFT, ACS_BLOCK);
-	
+	players[PLAYER_1] = createpl(loc1, RIGHT, playerchar);
+	players[PLAYER_2] = createpl(loc2, LEFT, playerchar);
+
 	// place players on screen and display countdown before beginning
 	clear();
 	redrawplayers(players);
@@ -99,11 +114,11 @@ void playgame(int clisock) {
 
 	for (;;) {
 		// RECIEVEING FROM SERVER
-		char signal = recv_server(clisock);					// receive signal from server
+		char signal = recvserversignal(clisock);				// receive signal from server
 		switch (signal) {
 			case SC_STD: updateplayers(clisock, players, 1); break;		// standard signal, update variables and redraw
 			case SC_END: endgame(clisock); break;				// end signal, end the game
-			default: exitwerror("recvsersig: invalid signal", EXIT_STD);
+			default: exitwerror("recv_server: invalid signal", EXIT_STD);
 		}
 
 		checkdirchange(&players[playernum]);					// if Player `plaernum`'s direction has changed, modify it
@@ -111,15 +126,15 @@ void playgame(int clisock) {
 		// SENDING TO SERVER
 		int collisionflag = willcollide(&players[playernum]);
 		switch (collisionflag) {
-			case 0:	send_server(clisock, &players[playernum]); break;	// if no collision, send standard signal with variables to server
+			case 0:	sendtoserver(clisock, &players[playernum]); break;	// if no collision, send standard signal with variables to server
 			case 1: sendcol(clisock); break;				// collision will/has occur(ed), send collision signal to server
+			default: exitwerror("willcollide: invalid value", EXIT_STD);
 		}
-
 		usleep(refreshrate);
 	}
 }
 
-void connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum) {
+int connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum) {
 	// initialize server address
 	memset(seraddr, 0, sizeof (*seraddr));
 	seraddr->sin_family = AF_INET;
@@ -131,21 +146,24 @@ void connecttoserver(int clisock, unsigned short port, char* straddr, int* serso
 
 	// connect to server
 	*sersock = connect(clisock, (struct sockaddr*) seraddr, sizeof (*seraddr));
-	if (*sersock == -1) exitwerror("Make sure the server is running and you are connecting to the correct port.\nconnect", EXIT_ERRNO);
+	if (*sersock == -1) {
+		showconnectionstatus(CONNECTION_FAIL);
+		return 0;
+	}
 
-	displayconnected();
+	showconnectionstatus(CONNECTION_SUCCESS);
 
-	// receive notification
 	if (recv(clisock, playernum, 1, 0) == -1) exitwerror("recv", EXIT_ERRNO);
+	return 1;
 }
 
-char recv_server(int clisock) {
+char recvserversignal(int clisock) {
 	char sigtype;
 	if (recv(clisock, &sigtype, 1, 0) == -1) exitwerror("recvsersig", EXIT_ERRNO);
 	return sigtype;
 }
 
-void send_server(int clisock, const struct Player* player) {
+void sendtoserver(int clisock, const struct Player* player) {
 	char msgtype = CS_STD;
 	char buffer[CS_STDSIZE];
 	buffer[PDIR] = player->dir;
@@ -178,9 +196,9 @@ void updateplayers(int clisock, struct Player* players, int speed) {
 	}
 }
 
-void quitgame(void) {
+void quitgame() {
 	endwin();
-	puts("\nGoodbye!");
+	puts("Goodbye!");
 	exit(EXIT_SUCCESS);
 }
 

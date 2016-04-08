@@ -21,7 +21,7 @@ void waitforplayers(int servsock, int* sockarr, struct sockaddr_in* addrarr);
 void sendplayernums(int* socks);
 
 /* Recieve signal from clients. Return collision status. */
-enum CollisionType recvclisig(char* dirs, int* clisocks);
+enum CollisionType recvclientsignal(char* dirs, int* clisocks);
 
 /* Recieves variables from player. 
    Handles CS_STD signal. */
@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
 	createserver(&servsock, &servaddr, port);
 
 	printf("Server running on port %u.\n", port);
-	// server will begin accepting clients again after each game
+	// server will begin accepting clients again after each game ends
 	for (;;) {
 		puts("\nWaiting for players to connect...");
 
@@ -68,8 +68,8 @@ int main(int argc, char** argv) {
 		// keep recieving and sending until a collision signal is recieved
 		int collided = -1;
 		while (collided == -1) {
-			sendvars(sockarr, dirbuffer);			// send directions
-			collided = recvclisig(dirbuffer, sockarr);	// recieve client information coming back to server socket
+			sendvars(sockarr, dirbuffer);				// send directions
+			collided = recvclientsignal(dirbuffer, sockarr);	// recieve client information coming back to server socket
 		}
 
 		// determine winner
@@ -142,7 +142,7 @@ void sendplayernums(int* socks) {
 	if (send(socks[PLAYER_2], &p2, 1, 0) == -1) exitwerror("send (player2)", EXIT_ERRNO);
 }
 
-enum CollisionType recvclisig(char* dirs, int* clisocks) {
+enum CollisionType recvclientsignal(char* dirs, int* clisocks) {
 	enum CollisionType numcoll = -1;
 	char sigtype;
 	int i;
@@ -150,12 +150,12 @@ enum CollisionType recvclisig(char* dirs, int* clisocks) {
 	for (i = 0; i < NUMPLAYERS; ++i) {
 		// recieve signal
 		int currsock = clisocks[i];
-		if (recv(currsock, &sigtype, 1, 0) == -1) exitwerror("recvclisig", EXIT_ERRNO);
+		if (recv(currsock, &sigtype, 1, 0) == -1) exitwerror("recvclientsignal", EXIT_ERRNO);
 
 		switch (sigtype) {
 			case CS_STD: recvvars(&dirs[i], clisocks[i]); break;		// standard signal, update variables
 			case CS_COL: numcoll = numcoll == 0 ? 2 : i; break;		// collision occured, determine collision type
-			default: exitwerror("recvclisig: invalid signal", EXIT_STD);
+			default: exitwerror("recvclientsignal: invalid signal", EXIT_STD);
 		}
 	}
 	return numcoll;

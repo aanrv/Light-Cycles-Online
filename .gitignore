@@ -6,4 +6,5 @@ visuals.o
 player.o
 mainmenu.o
 gameovermenu.o
-
+src/instructionsmenu.o
+src/connectionmenu.o

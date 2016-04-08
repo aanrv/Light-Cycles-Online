@@ -16,9 +16,6 @@ int setscreen(void);
 /* (Re)draw screen based on player locations and directions. */
 void redrawplayers(struct Player* players);
 
-/* Display connected message. */
-void displayconnected(void);
-
 /* Displays countdown before game begins. 
    loc indicates inital position (used for arrow). */
 void displaycountdown(const char playernum, struct Point loc);
