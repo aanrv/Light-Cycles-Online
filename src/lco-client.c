@@ -28,6 +28,9 @@ void loopmenu(void);
 /* Initializes ncurses screen and starts the game's graphics. */
 void playgame(int clisock);
 
+/* Given arguments from main, assign address and port, both in host byte order. */
+void assignaddrport(unsigned long* addr, unsigned short* port, int argc, char** argv);
+
 /**
  * Connects client socket to server with specified parameters.
  * If straddr is NULL, INADDR_LOOPBACK will be used,
@@ -35,7 +38,7 @@ void playgame(int clisock);
  * sersock and seraddr will be set to the server socket and server address respectively.
  * playernum will be set to either PLAYER_1 or PLAYER_2.
  */
-int connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum);
+int connecttoserver(int clisock, unsigned short port, unsigned long addr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum);
 
 /* Recieve and return signal from server. */
 char recvserversignal(int clisock);
@@ -56,10 +59,10 @@ void quitgame(void);
 void endgame(int clisock);
 
 int main(int argc, char** argv) {
-	// determine port's validity
-	unsigned short port = argc >= 3 ? strtoport(argv[PORTNUM]) : DEFPORT;
-	if (port == 0) exitwerror("Invalid port.", EXIT_STD);
-
+	unsigned long clientaddr;
+	unsigned short clientport;
+	assignaddrport(&clientaddr, &clientport, argc, argv);
+	
 	int sock = socket(AF_INET, SOCK_STREAM, 0);		// client socket
 	if (sock == -1) exitwerror("socket", EXIT_ERRNO);
 	int sersock;						// server socket
@@ -70,7 +73,7 @@ int main(int argc, char** argv) {
 	int connected;
 	do {
 		loopmenu();
-		connected = connecttoserver(sock, port, argc >= 2 ? argv[HOSTIP] : NULL, &sersock, &seraddr, &playernum);
+		connected = connecttoserver(sock, clientport, clientaddr, &sersock, &seraddr, &playernum);
 	} while (!connected);
 
 	// both players connected, start game
@@ -131,19 +134,40 @@ void playgame(int clisock) {
 			case 1: sendcol(clisock); break;				// collision will/has occur(ed), send collision signal to server
 			default: exitwerror("willcollide: invalid value", EXIT_STD);
 		}
+
 		usleep(refreshrate);
 	}
 }
 
-int connecttoserver(int clisock, unsigned short port, char* straddr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum) {
+void assignaddrport(unsigned long* addr, unsigned short* port, int argc, char** argv) {
+	char* straddress = NULL;
+	char* strport = NULL;
+	
+	int c;
+	while ((c = getopt(argc, argv, "a:p:")) != -1) {
+		switch (c) {
+			case 'a':	straddress = optarg; break;
+			case 'p':	strport = optarg; break;
+		}
+	}
+
+	*port = strport == NULL ? DEFPORT : strtoport(strport);
+	if (*port == 0) exitwerror("Invalid port.", EXIT_STD);
+
+	if (straddress == NULL) {
+		*addr = INADDR_LOOPBACK;
+	} else {
+		if (inet_pton(AF_INET, straddress, addr) <= 0) exitwerror("Invalid IP.", EXIT_STD);
+		*addr = ntohl(*addr);
+	}
+}
+
+int connecttoserver(int clisock, unsigned short port, unsigned long addr, int* sersock, struct sockaddr_in* seraddr, unsigned char* playernum) {
 	// initialize server address
 	memset(seraddr, 0, sizeof (*seraddr));
 	seraddr->sin_family = AF_INET;
 	seraddr->sin_port = htons(port);
-	if (straddr == NULL)
-		seraddr->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-	else
-		if (inet_pton(AF_INET, straddr, &(seraddr->sin_addr.s_addr)) <= 0) exitwerror("Invalid ip.", EXIT_STD);
+	seraddr->sin_addr.s_addr = htonl(addr);
 
 	// connect to server
 	*sersock = connect(clisock, (struct sockaddr*) seraddr, sizeof (*seraddr));

@@ -37,10 +37,10 @@ Note: When running client from a different host, you must provide the server hos
 
 `lco-server [portnum]`
 
-- `portnum` A port for the server to run on. Default value is 1337.
+- `portnum` Port number the server should attempt to run on. Default value is 1337.
 
-`lco-client [ipaddr] [portnum]`
+`lco-client [-a ipaddr] [-p portnum]`
 
-- `ipadds` IP Address of the server's host machine. Loopback address by default.
-- `portnum` Port number of server on specified machine. Default value is 1337.
+- `ipaddr` IP Address of the server's host. If not specified, loopback address is used.
+- `portnum` Server's port. Default value is 1337.
 
