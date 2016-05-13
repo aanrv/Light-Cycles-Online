@@ -116,7 +116,7 @@ void playgame(int clisock) {
 	displaycountdown(playernum, playernum == PLAYER_1 ? loc1 : loc2);
 	buildborder(GAMEBORDER);
 
-	for (;;) {
+	for (EVER) {
 		// RECIEVEING FROM SERVER
 		char signal = recvserversignal(clisock);				// receive signal from server
 		switch (signal) {

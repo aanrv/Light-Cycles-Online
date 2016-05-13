@@ -1,6 +1,8 @@
 #ifndef H_H
 #define H_H
 
+#define EVER ;;
+
 static const long PORTMIN 		= 1024;
 static const long PORTMAX 		= 65535;
 static const unsigned short DEFPORT 	= 1337;

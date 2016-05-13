@@ -39,21 +39,19 @@ int main(int argc, char** argv) {
 	int servsock;
 	struct sockaddr_in servaddr;
 	unsigned short port = argc >= 2 ? strtoport(argv[PORTNUM]) : DEFPORT;
-	if (port == 0) {
-		printf("Port must be between %lu and %lu.\n", PORTMIN, PORTMAX);
-		exitwerror("Invalid port.", EXIT_STD);
-	}
 	createserver(&servsock, &servaddr, port);
 
 	printf("Server running on port %u.\n", port);
 	// server will begin accepting clients again after each game ends
-	for (;;) {
+	for (EVER) {
 		puts("\nWaiting for players to connect...");
 
 		// wait for players to connect, then assign appropriate values
 		int sockarr[NUMPLAYERS];
 		struct sockaddr_in addrarr[NUMPLAYERS];
 		waitforplayers(servsock, sockarr, addrarr);
+
+		if (fork() == 0) continue;
 
 		puts("Game started.");
 
@@ -83,12 +81,17 @@ int main(int argc, char** argv) {
 		// game over, notify clients
 		endclients(sockarr, winner);
 		puts("Game over.");
+		break;
 	}
 
 	return EXIT_SUCCESS;
 }
 
 void createserver(int* servsock, struct sockaddr_in* servaddr, unsigned short port) {
+	if (port == 0) {
+		fprintf(stderr, "Port invalid: must be between %lu and %lu.\n", PORTMIN, PORTMAX);
+		exit(EXIT_FAILURE);
+	}
 	if ((*servsock = socket(AF_INET, SOCK_STREAM, 0)) == -1) exitwerror("socket", EXIT_ERRNO);
 
 	// allow port reuse
@@ -99,10 +102,6 @@ void createserver(int* servsock, struct sockaddr_in* servaddr, unsigned short po
 	memset(servaddr, 0, sizeof (*servaddr));
 	servaddr->sin_family = AF_INET;
 	servaddr->sin_addr.s_addr = htonl(INADDR_ANY);
-	if (port == 0) {
-		fprintf(stderr, "Port invalid: must be between %lu and %lu.\n", PORTMIN, PORTMAX);
-		exit(EXIT_FAILURE);
-	}
 	servaddr->sin_port = htons(port);
 
 	if (bind(*servsock, (struct sockaddr*) servaddr, sizeof (*servaddr)) == -1) exitwerror("bind", EXIT_ERRNO);

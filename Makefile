@@ -1,42 +1,43 @@
-CC	= gcc
-LIBS	= -lncurses
-FLAGS	= -Wall -Wextra
+CC		= gcc
+LIBS		= -lncurses
+FLAGS		= -Wall -Wextra
+S_DIR		= src
 
 default: lco-server lco-client
 
-lco-server:	src/lco-server.o src/h.o
-	$(CC) $(FLAGS) src/lco-server.o src/h.o -o lco-server $(LIBS)
+lco-server:	$(S_DIR)/lco-server.o $(S_DIR)/h.o
+	$(CC) $(FLAGS) $(S_DIR)/lco-server.o $(S_DIR)/h.o -o lco-server $(LIBS)
 
-lco-client:	src/lco-client.o src/visuals.o src/mainmenu.o src/connectionmenu.o src/instructionsmenu.o src/gameovermenu.o src/player.o src/h.o
-	$(CC) $(FLAGS) src/lco-client.o src/visuals.o src/mainmenu.o src/connectionmenu.o src/instructionsmenu.o src/gameovermenu.o src/player.o src/h.o -o lco-client $(LIBS)
+lco-client:	$(S_DIR)/lco-client.o $(S_DIR)/visuals.o $(S_DIR)/mainmenu.o $(S_DIR)/connectionmenu.o $(S_DIR)/instructionsmenu.o $(S_DIR)/gameovermenu.o $(S_DIR)/player.o $(S_DIR)/h.o
+	$(CC) $(FLAGS) $(S_DIR)/lco-client.o $(S_DIR)/visuals.o $(S_DIR)/mainmenu.o $(S_DIR)/connectionmenu.o $(S_DIR)/instructionsmenu.o $(S_DIR)/gameovermenu.o $(S_DIR)/player.o $(S_DIR)/h.o -o lco-client $(LIBS)
 
-src/lco-server.o:	src/lco-server.c
-	$(CC) $(FLAGS) src/lco-server.c -c -o src/lco-server.o
+$(S_DIR)/lco-server.o:	$(S_DIR)/lco-server.c
+	$(CC) $(FLAGS) $(S_DIR)/lco-server.c -c -o $(S_DIR)/lco-server.o
 
-src/lco-client.o:	src/lco-client.c
-	$(CC) $(FLAGS) src/lco-client.c -c -o src/lco-client.o
+$(S_DIR)/lco-client.o:	$(S_DIR)/lco-client.c
+	$(CC) $(FLAGS) $(S_DIR)/lco-client.c -c -o $(S_DIR)/lco-client.o
 
-src/visuals.o:	src/visuals.c
-	$(CC) $(FLAGS) src/visuals.c -c -o src/visuals.o
+$(S_DIR)/visuals.o:	$(S_DIR)/visuals.c
+	$(CC) $(FLAGS) $(S_DIR)/visuals.c -c -o $(S_DIR)/visuals.o
 
-src/mainmenu.o:	src/mainmenu.c
-	$(CC) $(FLAGS) src/mainmenu.c -c -o src/mainmenu.o
+$(S_DIR)/mainmenu.o:	$(S_DIR)/mainmenu.c
+	$(CC) $(FLAGS) $(S_DIR)/mainmenu.c -c -o $(S_DIR)/mainmenu.o
 
-src/connectionmenu.o:	src/connectionmenu.c
-	$(CC) $(FLAGS) src/connectionmenu.c -c -o src/connectionmenu.o
+$(S_DIR)/connectionmenu.o:	$(S_DIR)/connectionmenu.c
+	$(CC) $(FLAGS) $(S_DIR)/connectionmenu.c -c -o $(S_DIR)/connectionmenu.o
 
-src/instructionsmenu.o:	src/instructionsmenu.c
-	$(CC) $(FLAGS) src/instructionsmenu.c -c -o src/instructionsmenu.o
+$(S_DIR)/instructionsmenu.o:	$(S_DIR)/instructionsmenu.c
+	$(CC) $(FLAGS) $(S_DIR)/instructionsmenu.c -c -o $(S_DIR)/instructionsmenu.o
 
-src/gameovermenu.o:	src/gameovermenu.c
-	$(CC) $(FLAGS) src/gameovermenu.c -c -o src/gameovermenu.o
+$(S_DIR)/gameovermenu.o:	$(S_DIR)/gameovermenu.c
+	$(CC) $(FLAGS) $(S_DIR)/gameovermenu.c -c -o $(S_DIR)/gameovermenu.o
 
-src/player.o:	src/player.c
-	$(CC) $(FLAGS) src/player.c -c -o src/player.o
+$(S_DIR)/player.o:	$(S_DIR)/player.c
+	$(CC) $(FLAGS) $(S_DIR)/player.c -c -o $(S_DIR)/player.o
 
-src/h.o:	src/h.c
-	$(CC) $(FLAGS) src/h.c -c -o src/h.o
+$(S_DIR)/h.o:	$(S_DIR)/h.c
+	$(CC) $(FLAGS) $(S_DIR)/h.c -c -o $(S_DIR)/h.o
 
 clean:
-	rm -f lco-server lco-client src/*.o
+	rm -f lco-server lco-client $(S_DIR)/*.o
 
