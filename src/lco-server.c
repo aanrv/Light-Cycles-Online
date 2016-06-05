@@ -51,9 +51,16 @@ int main(int argc, char** argv) {
 		struct sockaddr_in addrarr[NUMPLAYERS];
 		waitforplayers(servsock, sockarr, addrarr);
 
-		if (fork() == 0) continue;
-
-		puts("Game started.");
+		// parent will close sockets and wait for other players to connect
+		// child will serve the current game and then terminate
+		pid_t pid = fork();
+		if (pid < 0) {
+			exitwerror("fork", EXIT_ERRNO);
+		} else if (pid > 0) {
+			int i;
+			for (i = 0; i < NUMPLAYERS; ++i) close(sockarr[i]);
+			continue;
+		}
 
 		// notify players of their player numbers
 		sendplayernums(sockarr);
@@ -80,7 +87,6 @@ int main(int argc, char** argv) {
 
 		// game over, notify clients
 		endclients(sockarr, winner);
-		puts("Game over.");
 		break;
 	}
 

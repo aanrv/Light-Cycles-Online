@@ -5,7 +5,7 @@
 #include "h.h"
 
 const int refreshrate = 70000;
-const char playerchar = '+';
+const char playerchar = '0';
 
 void createcursesscreen(void) {
 	// initialize curses window and set screen options
