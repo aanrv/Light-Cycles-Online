@@ -48,7 +48,7 @@ Note: When running client from a different host, you must provide the server hos
 
 A client/server model was used to implement the game. The server can be seen as the brain and the clients are the mindless interpreters of information. The game begins once both clients have connected to the server.
 
-**Message Types**
+### Message Types
 
 Let us call each bundle of information sent to or from the client or the server a message. Each message has a one byte header that indicates its type. Usually, this is a standard message containing player directions. Additionally, if a client's player collides, the client will send a "collision" message to the server. If a server receives a collision message, it determines the other player as the winner. It then sends both clients a message that declares the winner and tells both clients to end the game. A list of the different message types:
 
