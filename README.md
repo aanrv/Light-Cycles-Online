@@ -1,4 +1,4 @@
-# Tron-Light-Cycles-Online
+# Tron-Light-Cycles
 
 ![Menu](img/lco_menu.png) ![Gameplay](img/lco_gameplay.png)
 
@@ -16,7 +16,7 @@ Runs on Linux and Mac. To run on a Windows PC, install Linux.
 
 | OS / Distro    | Installation                          |
 | -------------- | ------------------------------------- |
-| Mac            | Should be included in the [Xcode Tools](https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man3/ncurses.3x.html).|
+| OS X           | Should be included in the [Xcode Tools](https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man3/ncurses.3x.html).|
 | Ubuntu/Debian  | `apt-get install libncurses5-dev`     |
 | Fedora         | `yum install ncurses-devel`           |
 
@@ -52,6 +52,8 @@ A client/server model was used to implement the game. The server can be seen as 
 
 Let us call each bundle of information sent to or from the client or the server a message. Each message has a one byte header that indicates its type. Usually, this is a standard message containing player directions. Additionally, if a client's player collides, the client will send a "collision" message to the server. If a server receives a collision message, it determines the other player as the winner. It then sends both clients a message that declares the winner and tells both clients to end the game. A list of the different message types:
 
+![Message Types](img/message_types.png)
+
 _Client-to-Server Messages_:
 
 1. Standard: Contains client's player's direction [`2 bytes`].
@@ -61,6 +63,8 @@ _Server-to-Client Messages_:
 
 1. Standard: Contains directions for all players [`3 bytes`] i.e [`(1 + number of players per game) bytes`].
 2. End: Notifies clients that game has ended. Contains winning player number [`2 bytes`].
+
+![Client Server Communication Model](img/client_server_communication_model.png)
 
 _Client_:
 
