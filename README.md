@@ -1,7 +1,5 @@
 # Tron-Light-Cycles
 
-![Menu](img/lco_menu.png) ![Gameplay](img/lco_gameplay.png)
-
 An implementation of the Tron Light Cycles game.
 
 It is a multiplayer game.
@@ -80,5 +78,5 @@ This entire process keeps both clients perfectly synchronized. Additionally, eac
 # References
 
 1. I learned about the C Sockets API mostly from [The Linux Programming Interface](https://www.amazon.com/Linux-Programming-Interface-System-Handbook/dp/1593272200). It is a textbook for programming in the Linux environment in general.
-2. [Beej's Guide](http://beej.us/guide/bgnet/) is a concise overview of Network Programming and is quite popular. I still mostly used the textbook, however.
-2. [This](http://gafferongames.com/networking-for-game-programmers/) site has some interesting articles regarding game-specific Network Programming.
+2. [Beej's Guide](http://beej.us/guide/bgnet/) is a concise overview of Network Programming and is quite popular. Again, I still mostly used the textbook.
+2. [This](http://gafferongames.com/networking-for-game-programmers/) site has some interesting articles regarding gaming-specific Network Programming.
