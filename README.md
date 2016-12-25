@@ -2,6 +2,8 @@
 
 An implementation of the Tron Light Cycles game.
 
+![Menu](img/lco_menu.png) ![Gameplay](img/lco_gameplay.png)
+
 It is a multiplayer game.
 The server and the client were written using the C Sockets API.
 The graphics are text based, as they were not my priority, and were designed using `ncurses`.
